@@ -1,0 +1,194 @@
+---
+title: "Relatório de análise dos preços ao produtor - Base alimentar brasileira"
+author: "João Pedro Magro"
+date: "Última atualização no dia `r format(Sys.time(), '%d de %B de %Y')`"
+output: 
+   html_document:
+   number_sections: true
+   toc: true
+bibliography: REFS_PAP_PTD_PKGS.bib
+---
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE
+                      ,results = 'show'
+                      ,error=FALSE
+                      ,warning=FALSE
+                      ,message=FALSE)
+options(scipen=999)
+```
+
+```{r BIBLIOTECAS, echo=FALSE , eval=TRUE}
+#'*Manipulação de dados*
+library(tidyverse)
+library(lubridate)
+
+#'*Gráficos*
+library(ggplot2)
+library(GGally)
+library(ggpubr)
+library(RColorBrewer)
+library(plotly)
+
+#'*Bibliografia*
+library(kableExtra)
+library(bibtex)
+```
+
+```{r DADOS, echo=FALSE , eval=TRUE}
+BD_COMP_PAP_PTD_ST_DEFLA_ANA_W <- readRDS("~/R_CORE/GitHub/IAIABR/PAP_PTD/PAP_PTD_DADOS/BD_COMP_PAP_PTD_ST_DEFLA_ANA_W.rds")
+
+BD_COMP_PAP_PTD_ST_DEFLA_ANA_L<-pivot_longer(BD_COMP_PAP_PTD_ST_DEFLA_ANA_W,
+                                             names_to = "VARIAVEIS",
+                                             values_to = "VALORES",
+                                             cols = c(3:8))
+
+BD_COMP_PAP_PTD_ST_DEFLA_ANA_L<-BD_COMP_PAP_PTD_ST_DEFLA_ANA_L%>%
+   filter(VARIAVEIS!="IND_CORR")
+
+PROX<-tibble(
+  Produtos_1=c("Café (em grão) Total","Laranja","Milho (em grão)","Soja (em grão)")
+)
+#c("Arroz (em casca)","Batata-inglesa","Feijão (em grão)","Mandioca","Trigo (em grão)")
+#c("Café (em grão) Total","Laranja","Milho (em grão)","Soja (em grão)")
+
+```
+
+
+```{r ANALISE 1, echo=FALSE , eval=TRUE}
+DF_ANA<-BD_COMP_PAP_PTD_ST_DEFLA_ANA_L%>%
+   filter(PRODUTO%in%PROX$Produtos_1)%>%
+   mutate(DATE=as_date(paste(ANO,"1","1",sep = "-")))%>%
+   filter(VARIAVEIS=="Preço ao produtor")%>%
+   mutate(ANO=as.numeric(ANO))
+
+DF_ANA_W<-pivot_wider(DF_ANA,id_cols = ANO,names_from = PRODUTO,values_from = VALORES)
+
+COEFS_MK<-function(DF){
+   COEFS<-NULL
+   OBJS<-unique(DF$PRODUTO)
+   for (OBJ in OBJS) {
+      SUSP<-DF%>%
+         filter(PRODUTO==OBJ)
+      A<-lm(formula=VALORES~ANO,data=SUSP)
+      COEF_T<-tibble(PRODUTO=OBJ,COFF=(A$coefficient[2]),RR=summary(A)$r.squared)
+      COEFS<-bind_rows(COEFS,COEF_T)
+   }
+   return(COEFS)
+}
+
+#-----#
+
+COFCOF_1<-COEFS_MK(DF_ANA%>%filter(ANO<=2007))%>%
+   mutate(INT="1995 - 2007")
+DF_ANA_S_1<-DF_ANA%>%
+   filter(ANO<=2007)%>%
+   group_by(PRODUTO)
+DF_ANA_S_1<-DF_ANA_S_1%>%
+   summarise(MED=mean(VALORES),
+             SD= sd(VALORES,na.rm = T))
+DF_P_1<-left_join(COFCOF_1,DF_ANA_S_1,by="PRODUTO")
+
+#-----#
+
+COFCOF_2<-COEFS_MK(DF_ANA%>%filter(ANO>2007))%>%
+   mutate(INT="2008 - 2020")
+DF_ANA_S_2<-DF_ANA%>%
+   filter(ANO>2008)%>%
+   group_by(PRODUTO)
+DF_ANA_S_2<-DF_ANA_S_2%>%
+   summarise(MED=mean(VALORES),
+             SD= sd(VALORES,na.rm = T))
+DF_P_2<-left_join(COFCOF_2,DF_ANA_S_2,by="PRODUTO")
+
+DF_P<-bind_rows(DF_P_1,DF_P_2)
+
+#-----#
+
+COFCOF<-COEFS_MK(DF_ANA)
+DF_ANA_S<-DF_ANA%>%
+   group_by(PRODUTO)%>%
+   summarise(MED=mean(VALORES),
+             SD= sd(VALORES))
+DF_P<-left_join(COFCOF,DF_ANA_S,by="PRODUTO")
+
+#
+
+kbl(DF_P,table.attr = "style = \"color: black;\"", position = "c")%>%
+  kable_styling(font_size = 16, position = "c", full_width = FALSE)
+
+kbl(DF_P_1,table.attr = "style = \"color: black;\"", position = "c")%>%
+  kable_styling(font_size = 16, position = "c", full_width = FALSE)
+
+kbl(DF_P_2,table.attr = "style = \"color: black;\"", position = "c")%>%
+  kable_styling(font_size = 16, position = "c", full_width = FALSE)
+```
+
+```{r Gráficos}
+#'*Gráfico*
+
+breaks = seq(500,12000, by=500)
+
+SH_PP<-ggplot(DF_ANA, aes(x=DATE, y=VALORES, group=PRODUTO, color=PRODUTO)) +
+   geom_line(size=1.5,alpha=0.5)+ 
+   geom_smooth(method='lm', formula= y~x, se=F,linetype = "longdash",size=0.75)+
+   scale_color_brewer(palette = "Dark2")+
+   scale_x_date(date_labels="%Y",date_breaks  ="1 year")+
+   scale_y_continuous("R$/Tonelada", limits = c(0,max(DF_ANA$VALORES)+1)
+                      ,label = function(VALORES){return(paste("R$",VALORES))}, breaks =breaks)+
+   theme_bw()+
+   ylab("R$/Tonelada")+
+   xlab("Ano")+
+   guides(fill=guide_legend(title=NULL))+
+   theme(legend.position="bottom",text = element_text(size = 10, face = "bold"),
+         legend.title = element_blank(),
+         axis.title.x = element_text(size = 15),
+         axis.title.y = element_text(size = 20),
+         axis.text.x = element_text(size = 10,angle = 35))
+
+SH_PP
+
+#-----#
+
+breaks = seq(500,12000, by=500)
+
+#DF_ANA_P1<-DF_ANA%>%
+#   mutate(PERIODO=case_when(ANO<=2007~"1995 - 2007",
+#                            TRUE~"2008 - 2020"))%>%
+#   mutate(PRODUTO=case_when(PRODUTO=="Arroz (em casca)"~"Arroz",
+#                            PRODUTO=="Feijão (em grão)"~"Feijão",
+#                            PRODUTO=="Trigo (em grão)"~"Trigo",
+#                            PRODUTO=="Mandioca"~"Mandioca",
+#                            PRODUTO=="Batata-inglesa"~"Batata\ninglesa"))%>%
+#   group_by(PRODUTO)
+
+DF_ANA_P1<-DF_ANA%>%
+   mutate(PERIODO=case_when(ANO<=2007~"1995 - 2007",
+                            TRUE~"2008 - 2020"))%>%
+   mutate(PRODUTO=case_when(PRODUTO=="Café (em grão) Total"~"Café",
+                            PRODUTO=="Laranja"~"Laranja",
+                            PRODUTO=="Milho (em grão)"~"Milho",
+                            PRODUTO=="Soja (em grão)"~"Soja"))%>%
+   group_by(PRODUTO)
+
+SH_PP<-ggplot(DF_ANA_P1, aes(x=DATE, y=VALORES, group=PRODUTO)) +
+   geom_line(size=1.5,alpha=0.5)+ 
+   geom_smooth(method='lm', formula= y~x, se=F,size=0.75)+
+   scale_color_brewer(palette = "Dark2")+
+   scale_x_date(date_labels="%Y",date_breaks  ="1 year")+
+   scale_y_continuous("R$/Tonelada",label = function(VALORES){return(paste("R$",VALORES))})+
+   theme_bw()+
+   ylab("R$/Tonelada")+
+   xlab("Ano")+
+   guides(fill=guide_legend(title=NULL))+
+   theme(legend.position="bottom",text = element_text(size = 10, face = "bold"),
+         legend.title = element_blank(),
+         axis.title.x = element_text(size = 15),
+         axis.title.y = element_text(size = 20),
+         axis.text.x = element_text(size = 10,angle = 35))+ 
+  facet_grid(PRODUTO~PERIODO, scales="free")
+
+SH_PP
+
+
+```
+

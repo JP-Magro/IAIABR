@@ -1,0 +1,145 @@
+---
+title: "Relatório 1 - Ajustes para entrega"
+author: "João Pedro Magro"
+date: "13/12/2021"
+output: html_document
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE
+                      ,results = 'show'
+                      ,error=FALSE
+                      ,warning=FALSE
+                      ,message=FALSE)
+```
+
+```{r BIBLIOTECAS, echo=FALSE}
+#'*Coleta e manipulação de dados*
+
+library(ipeadatar)
+library(sidrar)
+library(tidyverse)
+library(lubridate)
+
+#'*Deflação de séries*
+
+library(deflateBR)
+
+
+#'*Tabelas*
+
+library(kableExtra)
+
+#'*Gráficos*
+
+library(ggplot2)
+library(GGally)
+library(ggpubr)
+library(RColorBrewer)
+library(plotly)
+
+```
+
+```{r Carregamento de BD´s, include=FALSE}
+#'*Bancos de dados*
+
+
+TAB_COMP_IBGE_VARS<-readRDS("~/R_CORE/GitHub/IAIABR/PAP_PTD/PAP_PTD_DADOS/IBGE_TABS_ST1/TAB_COMP_IBGE_VARS.rds" )
+
+
+
+#'*Índices*
+
+#IGPM
+IGPM_FGV_SERIE<-ipeadata("IGP12_IGPMG12", language = c("br"), quiet = FALSE)
+IGPM_FGV_SERIE<-IGPM_FGV_SERIE%>%
+   filter(date>=as_date("1995-01-01"))%>%
+   mutate(value=value)%>%
+   mutate(ACC=cumsum(value))%>%
+   select(1,2,3,6)%>%
+   mutate("IND"="IGP-M/FGV")
+
+colnames(IGPM_FGV_SERIE)<-c("COD_IPEADATA","DATE","VALOR","ACUMULADO","Índice")
+
+
+#IPCA
+IPCA_IBGE_SERIE<-ipeadata("PRECOS12_IPCAG12", language = c("br"), quiet = FALSE)
+IPCA_IBGE_SERIE<-IPCA_IBGE_SERIE%>%
+   filter(date>=as_date("1995-01-01"))%>%
+   mutate(value=value)%>%
+   mutate(ACC=cumsum(value))%>%
+   select(1,2,3,6)%>%
+   mutate("IND"="IPCA/IBGE")
+
+colnames(IPCA_IBGE_SERIE)<-c("COD_IPEADATA","DATE","VALOR","ACUMULADO","Índice")
+
+#IPCA-IPAB
+IPCA_IBGE_SERIE_ALM<-ipeadata("PRECOS12_IPCAAB12", language = c("br"), quiet = FALSE)
+IPCA_IBGE_SERIE_ALM<-IPCA_IBGE_SERIE_ALM%>%
+   filter(date>=as_date("1995-01-01"))%>%
+   mutate(ACC=cumsum(value))%>%
+   select(1,2,3,6)%>%
+   mutate("IND"="IPCA/IBGE - Alim")
+
+colnames(IPCA_IBGE_SERIE_ALM)<-c("COD_IPEADATA","DATE","VALOR","ACUMULADO","Índice")
+
+
+SERIE_IND<-bind_rows(IGPM_FGV_SERIE,IPCA_IBGE_SERIE,IPCA_IBGE_SERIE_ALM)
+
+SERIE_IND_ANO<-SERIE_IND%>%
+   mutate(ANO=year(DATE))%>%
+   group_by(ANO,COD_IPEADATA,Índice)%>%
+   summarise(Valor=sum(VALOR))%>%
+   mutate(DATE=as_date(paste(ANO,1,1,sep = "-")))%>%
+   select(Índice,Valor,DATE)
+
+SERIE_IND_ANO_W<-pivot_wider(SERIE_IND_ANO,id_cols = DATE, names_from = Índice ,values_from = Valor)
+
+SERIE_IND_ANO_W<-SERIE_IND_ANO_W%>%
+   dplyr::arrange(DATE)
+
+```
+
+<br>
+
+# Cálculo de produtividade
+***
+
+<br>
+
+$$Leite = \frac{\frac{Mil \ litros}{1000}}{Vacas \ Ordenhadas} $$
+<br>
+
+$$Ovos = \frac{\frac{Mil \ dúzias}{12000}}{Galinhas \ poedeiras} $$
+
+<br>
+
+$$Carcaças \ bovinas = \frac{Total \ abatido}{\left(\frac{Cabeças \ de \ gado \ _{Efetivo}}{Ha \ pasto_{MapBiomas}}\right)} $$
+
+<br>
+
+## Variáveis integradas no banco de dados
+
+<br>
+Re
+```{r , echo=FALSE}
+kbl(TAB_COMP_IBGE_VARS,table.attr = "style = \"color: black;\"", position = "c")%>%
+  kable_styling(font_size = 16, position = "c", full_width = FALSE)
+```
+
+
+<br>
+<br>
+
+# Correlograma - Índices IPCA e IGPM
+***
+
+<br>
+
+```{r , echo=FALSE}
+ggpairs(SERIE_IND_ANO_W[,2:4])
+```
+
+
+
+<br>

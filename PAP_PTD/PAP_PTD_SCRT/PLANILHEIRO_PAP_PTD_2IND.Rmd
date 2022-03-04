@@ -1,0 +1,169 @@
+---
+title: "Memória - Perador de planilhas - Preço ao produtor"
+author: "João Pedro Magro"
+date: "Última atualização no dia `r format(Sys.time(), '%d de %B de %Y')`"
+output: html_document
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE
+                      ,results = 'show'
+                      ,error=FALSE
+                      ,warning=FALSE
+                      ,message=FALSE)
+```
+
+<br>
+<br>
+
+# Bibliotecas utilizadas
+
+***
+
+<br>
+
+```{r BIBLIOTECAS}
+#'*Coleta e manipulação de dados*
+
+library(tidyverse)
+library(lubridate)
+library(readxl)
+library(xlsx)
+```
+
+<br>
+<br>
+
+# Banco de dados
+***
+
+<br>
+
+```{r Carregando Bancos de dados}
+BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IPCA <- readRDS("~/R_CORE/GitHub/IAIABR/PAP_PTD/PAP_PTD_DADOS/BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IPCA.rds")
+
+BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IGPM <- readRDS("~/R_CORE/GitHub/IAIABR/PAP_PTD/PAP_PTD_DADOS/BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IGPM.rds")
+
+```
+
+<br>
+<br>
+
+# Manipulação dos dados
+***
+
+<br>
+
+```{r Filtragem}
+
+PROX<-c("Arroz (em casca)","Ovos de galinha","Banana (cacho)","Batata-inglesa","Carcaça bovino",
+  "Leite","Café (em grão) Total","Cana-de-açúcar","Cebola","Feijão (em grão)",
+  "Laranja","Mandioca","Milho (em grão)","Soja (em grão)","Carcaça suíno","Tomate","Trigo (em grão)","Carcaça frango")
+
+PP_PLANILHA_IPCA<-BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IPCA%>%
+   filter(PRODUTO%in%PROX)
+
+PP_PLANILHA_IGPM<-BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IGPM%>%
+   filter(PRODUTO%in%PROX)
+
+rm(BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IGPM, BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IPCA)
+```
+
+<br>
+
+```{r Quant}
+QuantCadeias_IGPM <- PP_PLANILHA_IGPM%>%
+                                        select(ANO, PRODUTO, `Quantidade produzida`)
+QuantCadeias_IGPM <- pivot_wider(QuantCadeias_IGPM, id_cols = ANO, names_from = PRODUTO, values_from = `Quantidade produzida`, names_prefix = "IGPM -")
+
+QuantCadeias_IPCA<-PP_PLANILHA_IPCA%>%
+                                        select(ANO, PRODUTO, `Quantidade produzida`)
+QuantCadeias_IPCA <- pivot_wider(QuantCadeias_IPCA, id_cols = ANO, names_from = PRODUTO, values_from = `Quantidade produzida`, names_prefix = "IPCA -")
+
+QuantCadeias <- left_join(QuantCadeias_IPCA,QuantCadeias_IGPM, by="ANO")
+```
+
+<br>
+
+```{r Valor total da produção}
+ValorCadeias_IGPM <- PP_PLANILHA_IGPM%>%
+                                        select(ANO, PRODUTO, `Valor da produção`)
+ValorCadeias_IGPM <- pivot_wider(ValorCadeias_IGPM, id_cols = ANO, names_from = PRODUTO, values_from = `Valor da produção`, names_prefix = "IGPM -")
+
+ValorCadeias_IPCA<-PP_PLANILHA_IPCA%>%
+                                        select(ANO, PRODUTO, `Valor da produção`)
+ValorCadeias_IPCA <- pivot_wider(ValorCadeias_IPCA, id_cols = ANO, names_from = PRODUTO, values_from = `Valor da produção`, names_prefix = "IPCA -")
+
+ValorCadeias <- left_join(ValorCadeias_IPCA,ValorCadeias_IGPM, by="ANO")
+```
+
+<br>
+
+```{r Preço ao produtor}
+PreçoAoProdutorCadeias_IGPM <- PP_PLANILHA_IGPM%>%
+   select(ANO, PRODUTO, `Preço ao produtor`)
+PreçoAoProdutorCadeias_IGPM <- pivot_wider(PreçoAoProdutorCadeias_IGPM, id_cols = ANO, names_from = PRODUTO, values_from = `Preço ao produtor`, names_prefix = "IGPM -")
+
+PreçoAoProdutorCadeias_IPCA<-PP_PLANILHA_IPCA%>%
+   select(ANO, PRODUTO, `Preço ao produtor`)
+PreçoAoProdutorCadeias_IPCA <- pivot_wider(PreçoAoProdutorCadeias_IPCA, id_cols = ANO, names_from = PRODUTO, values_from = `Preço ao produtor`, names_prefix = "IPCA -")
+
+PreçoAoProdutorCadeias <- left_join(PreçoAoProdutorCadeias_IPCA,PreçoAoProdutorCadeias_IGPM, by="ANO")
+```
+
+<br>
+<br>
+
+```{r Unidades produtivas}
+
+UnidadesProdutivas_IGPM <- PP_PLANILHA_IGPM%>%
+   select(ANO, PRODUTO, `Unidades produtivas`)
+UnidadesProdutivas_IGPM <- pivot_wider(UnidadesProdutivas_IGPM, id_cols = ANO, names_from = PRODUTO, values_from = `Unidades produtivas`, names_prefix = "IGPM -")
+
+UnidadesProdutivas_IPCA<-PP_PLANILHA_IPCA%>%
+   select(ANO, PRODUTO, `Unidades produtivas`)
+UnidadesProdutivas_IPCA <- pivot_wider(UnidadesProdutivas_IPCA, id_cols = ANO, names_from = PRODUTO, values_from = `Unidades produtivas`, names_prefix = "IPCA -")
+
+UnidadesProdutivas <- left_join(UnidadesProdutivas_IPCA,UnidadesProdutivas_IGPM, by="ANO")
+
+```
+
+
+<br>
+<br>
+
+```{r Produtividade}
+
+Produtividade_IGPM <- PP_PLANILHA_IGPM%>%
+   select(ANO, PRODUTO, Produtividade)
+Produtividade_IGPM <- pivot_wider(Produtividade_IGPM, id_cols = ANO, names_from = PRODUTO, values_from = Produtividade, names_prefix = "IGPM -")
+
+Produtividade_IPCA<-PP_PLANILHA_IPCA%>%
+   select(ANO, PRODUTO, Produtividade)
+Produtividade_IPCA <- pivot_wider(Produtividade_IPCA, id_cols = ANO, names_from = PRODUTO, values_from = Produtividade, names_prefix = "IPCA -")
+
+Produtividade <- left_join(Produtividade_IPCA,Produtividade_IGPM, by="ANO")
+
+```
+
+
+<br>
+<br>
+
+```{r salvando o excell}
+
+#'*Carregamento dos deflatores BCB*
+IND_CORR_IGMP_BCB <- PP_PLANILHA_IGPM%>%
+                                        select(ANO, IPCA, IGPM)
+
+```
+
+```{r}
+write.xlsx(IND_CORR_IGMP_BCB, file="PAP_CADEIAS_IPCA_IGPM.xlsx", sheetName="Séries deflatores")
+write.xlsx(QuantCadeias, file="PAP_CADEIAS_IPCA_IGPM.xlsx", sheetName="Quantidade produzida", append=TRUE)
+write.xlsx(UnidadesProdutivas, file="PAP_CADEIAS_IPCA_IGPM.xlsx", sheetName="Unidades produtivas", append=TRUE)
+write.xlsx(Produtividade, file="PAP_CADEIAS_IPCA_IGPM.xlsx", sheetName="Produtividade", append=TRUE)
+write.xlsx(ValorCadeias, file="PAP_CADEIAS_IPCA_IGPM.xlsx", sheetName="Valor da produção", append=TRUE)
+write.xlsx(PreçoAoProdutorCadeias, file="PAP_CADEIAS_IPCA_IGPM.xlsx",sheetName="Preço ao produtor",append=TRUE)
+
+```

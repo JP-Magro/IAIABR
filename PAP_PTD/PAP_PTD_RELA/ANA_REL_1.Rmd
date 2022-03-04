@@ -1,0 +1,544 @@
+---
+title: "Relatório de análise - Banco de dados PAP e PTD"
+author: "João Pedro Magro"
+date: "Última atualização no dia `r format(Sys.time(), '%d de %B de %Y')`"
+output:
+  html_document
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE
+                      ,results = 'show'
+                      ,error=FALSE
+                      ,warning=FALSE
+                      ,message=FALSE)
+```
+
+```{r BIBLIOTECAS, echo=FALSE}
+#'*Coleta e manipulação de dados*
+library(tidyverse)
+library(lubridate)
+library(plyr)
+library(kableExtra)
+
+#'*Gráficos*
+
+library(ggplot2)
+library(GGally)
+library(ggpubr)
+library(RColorBrewer)
+library(plotly)
+library(patchwork)
+
+```
+
+```{r DADOS, echo=FALSE}
+BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IPCA_IGPM <- readRDS("~/R_CORE/GitHub/IAIABR/PAP_PTD/PAP_PTD_DADOS/BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IPCA_IGPM.rds")
+
+BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM<-pivot_longer(BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IPCA_IGPM,
+                                             names_to = "VARIAVEIS",
+                                             values_to = "VALORES",
+                                             cols = c(3:11))
+
+PROX<-tibble(
+  Produtos=c("Arroz (em casca)","Banana (cacho)","Batata-inglesa","Café (em grão) Total","Cebola","Feijão (em grão)", "Laranja","Mandioca","Milho (em grão)","Soja (em grão)","Tomate","Trigo (em grão)"
+  ,"Carcaça bovino","Leite","Carcaça suíno","Carcaça frango","Ovos de galinha"),
+  Origem=c(rep("Vegetal",12),rep("Animal",5))
+)
+
+BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM<-left_join(BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM,PROX,by=c("PRODUTO"="Produtos"))
+
+VARS <- colnames(BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IPCA_IGPM)
+
+rm(PROX)
+```
+
+### Gráfico 1 - Série histórica de valor total da produção - Corrigidos pelo IPCA
+***
+
+```{r Gráfico 1 - valor total da produção vegetal IPCA, echo=FALSE, fig.width=11,fig.height=7}
+
+DF_GRAF<-BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM |>
+   filter(VARIAVEIS%in%VARS[3]&ANO>=2007&ANO<=2019) |>
+   mutate(DATE=as_date(paste(ANO,"1","1",sep = "-")))
+
+DF_GRAF_1<-BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM |>
+   filter(VARIAVEIS%in%VARS[3]&ANO>=2007&ANO<=2013) |>
+   mutate(DATE=as_date(paste(ANO,"1","1",sep = "-")))
+
+DF_GRAF_2<-BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM |>
+   filter(VARIAVEIS%in%VARS[3]&ANO>=2013&ANO<=2019) |>
+   mutate(DATE=as_date(paste(ANO,"1","1",sep = "-")))
+
+breaks <- seq(0, max(DF_GRAF$VALORES,na.rm=T), by=10)
+
+# PLOT 1 ----
+SH_PLT<-ggplot(DF_GRAF, aes(x=DATE, y=VALORES, group=PRODUTO, color=PRODUTO)) +
+   geom_line()+
+   scale_x_date(date_labels="%Y",date_breaks  ="1 year")+
+   scale_y_continuous("Bilhões de reais",
+                      limits = c(0,max(DF_GRAF$VALORES)+1),
+                      label = function(VALORES){return(paste("R$",VALORES))},
+                      breaks = breaks)+
+   theme_bw()+
+   ylab("Milhões de reais")+
+   xlab("Ano")+
+   guides(fill=guide_legend(title=NULL))+
+   theme(legend.position="bottom",text = element_text(size = 13, face = "bold"),
+         legend.title = element_blank(),
+         axis.title.x = element_text(size = 15),
+         axis.title.y = element_text(size = 20),
+         axis.text.x = element_text(size = 10,angle = 35))
+
+
+ggplotly(SH_PLT)
+```
+
+<br>
+
+### Tabela 1 - Modelos de regressão linear do valor total da produção - Corrigidos pelo IPCA
+***
+
+```{r eval=TRUE, include=TRUE, echo = FALSE}
+models <- ddply( DF_GRAF , .(PRODUTO), function(x) {
+   t <- lm(x, formula = VALORES ~ DATE)
+   data.frame("VALORES-Intercepto" = coefficients(t)[1], 
+              ANO = coefficients(t)[2], 
+              "PVAL" = summary(t)$coef[2,4],
+              SIGNIFICANCE = if_else(summary(t)$coef[2,4]<0.001,"0 ***",
+                                     if_else(0.001<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.01,"0.001 **",
+                                             if_else(0.01<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.05,"0.01 *",
+                                                     if_else(0.05<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.1,"0.1","1"))))
+   )
+   })
+
+models_1 <- DF_GRAF |>
+   group_by(PRODUTO) |>
+   dplyr::summarise(
+      MÉDIA = mean(VALORES, na.rm = T),
+      DESV.PAD = sd(VALORES, na.rm = T),
+      Q5 = quantile(VALORES, 0.05, na.rm = T),
+      Q95 = quantile(VALORES, 0.95, na.rm = T)
+   )
+
+DESC <- left_join(models_1, models, by="PRODUTO")
+
+kbl(DESC,table.attr = "style = \"color: black;\"", position = "c") |>
+  kable_styling(font_size = 16, position = "c", full_width = FALSE) |>
+   add_header_above(c(" ", "Descritivas" = 4, "Modelo linear" = 4))
+```
+
+<br>
+<br>
+<br>
+
+### Gráfico 2 - Série histórica de valor total da produção - Corrigidos pelo IGPM
+***
+
+```{r Gráfico 2 - valor total da produção vegetal IGPM, echo=FALSE, fig.width=11,fig.height=7}
+
+DF_GRAF<-BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM |>
+   filter(VARIAVEIS%in%VARS[5]&ANO>=2007&ANO<=2019) |>
+   mutate(DATE=as_date(paste(ANO,"1","1",sep = "-")))
+
+breaks <- seq(0, max(DF_GRAF$VALORES,na.rm=T), by=10)
+
+SH_PLT_2<-ggplot(DF_GRAF, aes(x=DATE, y=VALORES, group=PRODUTO, color=PRODUTO)) +
+   geom_line()+
+   scale_x_date(date_labels="%Y",date_breaks  ="1 year")+
+   scale_y_continuous("Bilhões de reais",
+                      limits = c(0,max(DF_GRAF$VALORES)+1),
+                      label = function(VALORES){return(paste("R$",VALORES))},
+                      breaks = breaks)+
+   theme_bw()+
+   ylab("Milhões de reais")+
+   xlab("Ano")+
+   guides(fill=guide_legend(title=NULL))+
+   theme(legend.position="bottom",text = element_text(size = 13, face = "bold"),
+         legend.title = element_blank(),
+         axis.title.x = element_text(size = 15),
+         axis.title.y = element_text(size = 20),
+         axis.text.x = element_text(size = 10,angle = 35))
+
+ggplotly(SH_PLT_2)
+```
+
+<br>
+
+### Tabela 2 - Modelos de regressão linear do valor total da produção - Corrigidos pelo IGPM
+***
+
+```{r eval=TRUE, include=TRUE, echo = FALSE}
+models <- ddply( DF_GRAF , .(PRODUTO), function(x) {
+   t <- lm(x, formula = VALORES ~ DATE)
+   data.frame("VALORES-Intercepto" = coefficients(t)[1], 
+              ANO = coefficients(t)[2], 
+              "PVAL" = summary(t)$coef[2,4],
+              SIGNIFICANCE = if_else(summary(t)$coef[2,4]<0.001,"0 ***",
+                                     if_else(0.001<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.01,"0.001 **",
+                                             if_else(0.01<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.05,"0.01 *",
+                                                     if_else(0.05<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.1,"0.1","1"))))
+   )
+   })
+
+models_1 <- DF_GRAF |>
+   group_by(PRODUTO) |>
+   dplyr::summarise(
+      MÉDIA = mean(VALORES, na.rm = T),
+      DESV.PAD = sd(VALORES, na.rm = T),
+      Q5 = quantile(VALORES, 0.05, na.rm = T),
+      Q95 = quantile(VALORES, 0.95, na.rm = T)
+   )
+
+DESC <- left_join(models_1, models, by="PRODUTO")
+
+kbl(DESC,table.attr = "style = \"color: black;\"", position = "c") |>
+  kable_styling(font_size = 16, position = "c", full_width = FALSE) |>
+   add_header_above(c(" ", "Descritivas" = 4, "Modelo linear" = 4))
+```
+
+<br>
+<br>
+<br>
+
+### Gráfico 3 - Série histórica do preço ao produtor - Corrigidos pelo IPCA
+***
+
+```{r Gráfico 3 - valor total da produção vegetal, echo=FALSE, fig.width=11,fig.height=7}
+
+DF_GRAF<-BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM |>
+   filter(VARIAVEIS%in%VARS[4]&ANO>=2007&ANO<=2019) |>
+   mutate(DATE=as_date(paste(ANO,"1","1",sep = "-")))
+
+breaks <- seq(0, max(DF_GRAF$VALORES,na.rm=T), by=500)
+
+SH_PLT<-ggplot(DF_GRAF, aes(x=DATE, y=VALORES, group=PRODUTO, color=PRODUTO)) +
+   geom_line()+
+   scale_x_date(date_labels="%Y",date_breaks  ="1 year")+
+   scale_y_continuous("R$/Tonelada",
+                      limits = c(0,max(DF_GRAF$VALORES)+1),
+                      label = function(VALORES){return(paste("R$",VALORES))},
+                      breaks = breaks)+
+   theme_bw()+
+   ylab("Milhões de reais")+
+   xlab("Ano")+
+   guides(fill=guide_legend(title=NULL))+
+   theme(legend.position="bottom",text = element_text(size = 13, face = "bold"),
+         legend.title = element_blank(),
+         axis.title.x = element_text(size = 15),
+         axis.title.y = element_text(size = 20),
+         axis.text.x = element_text(size = 10,angle = 35))
+
+ggplotly(SH_PLT)
+```
+
+<br>
+
+### Tabela 3 - Modelos de regressão linear do preço ao produtor - Corrigidos pelo IPCA
+***
+
+```{r eval=TRUE, include=TRUE, echo = FALSE}
+models <- ddply( DF_GRAF , .(PRODUTO), function(x) {
+   t <- lm(x, formula = VALORES ~ DATE)
+   data.frame("VALORES-Intercepto" = coefficients(t)[1], 
+              ANO = coefficients(t)[2], 
+              "PVAL" = summary(t)$coef[2,4],
+              SIGNIFICANCE = if_else(summary(t)$coef[2,4]<0.001,"0 ***",
+                                     if_else(0.001<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.01,"0.001 **",
+                                             if_else(0.01<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.05,"0.01 *",
+                                                     if_else(0.05<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.1,"0.1","1"))))
+   )
+   })
+
+models_1 <- DF_GRAF |>
+   group_by(PRODUTO) |>
+   dplyr::summarise(
+      MÉDIA = mean(VALORES, na.rm = T),
+      DESV.PAD = sd(VALORES, na.rm = T),
+      Q5 = quantile(VALORES, 0.05, na.rm = T),
+      Q95 = quantile(VALORES, 0.95, na.rm = T)
+   )
+
+DESC <- left_join(models_1, models, by="PRODUTO")
+
+kbl(DESC,table.attr = "style = \"color: black;\"", position = "c") |>
+  kable_styling(font_size = 16, position = "c", full_width = FALSE) |>
+   add_header_above(c(" ", "Descritivas" = 4, "Modelo linear" = 4))
+```
+
+<br>
+<br>
+<br>
+
+### Gráfico 4 - Série histórica do preço ao produtor - Corrigidos pelo IGPM
+***
+
+```{r Gráfico 4 - valor total da produção vegetal, echo=FALSE, fig.width=11,fig.height=7}
+
+DF_GRAF<-BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM |>
+   filter(VARIAVEIS%in%VARS[6]&ANO>=2007&ANO<=2019) |>
+   mutate(DATE=as_date(paste(ANO,"1","1",sep = "-")))
+
+breaks <- seq(0, max(DF_GRAF$VALORES,na.rm=T), by=500)
+
+SH_PLT<-ggplot(DF_GRAF, aes(x=DATE, y=VALORES, group=PRODUTO, color=PRODUTO)) +
+   geom_line()+
+   scale_x_date(date_labels="%Y",date_breaks  ="1 year")+
+   scale_y_continuous("R$/Tonelada",
+                      limits = c(0,max(DF_GRAF$VALORES)+1),
+                      label = function(VALORES){return(paste("R$",VALORES))},
+                      breaks = breaks)+
+   theme_bw()+
+   ylab("Milhões de reais")+
+   xlab("Ano")+
+   guides(fill=guide_legend(title=NULL))+
+   theme(legend.position="bottom",text = element_text(size = 13, face = "bold"),
+         legend.title = element_blank(),
+         axis.title.x = element_text(size = 15),
+         axis.title.y = element_text(size = 20),
+         axis.text.x = element_text(size = 10,angle = 35))
+
+ggplotly(SH_PLT)
+```
+
+<br>
+
+### Tabela 4 - Modelos de regressão linear do preço ao produtor - Corrigidos pelo IGPM
+***
+
+```{r eval=TRUE, include=TRUE, echo = FALSE}
+models <- ddply( DF_GRAF , .(PRODUTO), function(x) {
+   t <- lm(x, formula = VALORES ~ DATE)
+   data.frame("VALORES-Intercepto" = coefficients(t)[1], 
+              ANO = coefficients(t)[2], 
+              "PVAL" = summary(t)$coef[2,4],
+              SIGNIFICANCE = if_else(summary(t)$coef[2,4]<0.001,"0 ***",
+                                     if_else(0.001<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.01,"0.001 **",
+                                             if_else(0.01<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.05,"0.01 *",
+                                                     if_else(0.05<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.1,"0.1","1"))))
+   )
+   })
+
+models_1 <- DF_GRAF |>
+   group_by(PRODUTO) |>
+   dplyr::summarise(
+      MÉDIA = mean(VALORES, na.rm = T),
+      DESV.PAD = sd(VALORES, na.rm = T),
+      Q5 = quantile(VALORES, 0.05, na.rm = T),
+      Q95 = quantile(VALORES, 0.95, na.rm = T)
+   )
+
+DESC <- left_join(models_1, models, by="PRODUTO")
+
+kbl(DESC,table.attr = "style = \"color: black;\"", position = "c") |>
+  kable_styling(font_size = 16, position = "c", full_width = FALSE) |>
+   add_header_above(c(" ", "Descritivas" = 4, "Modelo linear" = 4))
+```
+
+<br>
+<br>
+<br>
+
+### Gráfico 5 - Série histórica da quantidade produzida no ano
+   
+***
+   
+```{r Gráfico 5 - Total produzido vegetal, echo=FALSE, fig.width=11,fig.height=7}
+
+DF_GRAF<-BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM |>
+   filter(VARIAVEIS%in%VARS[7]&ANO>=2007&ANO<=2019) |>
+   mutate(DATE=as_date(paste(ANO,"1","1",sep = "-")))
+
+breaks <- seq(0, max(DF_GRAF$VALORES,na.rm=T), by=10)
+
+SH_TP<-ggplot(DF_GRAF, aes(x=DATE, y=VALORES, group=PRODUTO, color=PRODUTO)) +
+   geom_line()+
+   scale_x_date(date_labels="%Y",date_breaks  ="1 year")+
+   scale_y_continuous(breaks = breaks )+
+   theme_bw()+
+   ylab("Milhões de toneladas")+
+   xlab("Ano")+
+   guides(fill=guide_legend(title=NULL))+
+   theme(legend.position="bottom",text = element_text(size = 13, face = "bold"),
+         legend.title = element_blank(),
+         axis.title.x = element_text(size = 15),
+         axis.title.y = element_text(size = 20),
+         axis.text.x = element_text(size = 10,angle = 35))
+
+ggplotly(SH_TP)
+
+```
+
+<br>
+
+### Tabela 5 - Modelos de regressão linear da quantidade produzida
+***
+
+```{r eval=TRUE, include=TRUE, echo = FALSE}
+models <- ddply( DF_GRAF , .(PRODUTO), function(x) {
+   t <- lm(x, formula = VALORES ~ DATE)
+   data.frame("VALORES-Intercepto" = coefficients(t)[1], 
+              ANO = coefficients(t)[2], 
+              "PVAL" = summary(t)$coef[2,4],
+              SIGNIFICANCE = if_else(summary(t)$coef[2,4]<0.001,"0 ***",
+                                     if_else(0.001<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.01,"0.001 **",
+                                             if_else(0.01<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.05,"0.01 *",
+                                                     if_else(0.05<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.1,"0.1","1"))))
+   )
+   })
+
+models_1 <- DF_GRAF |>
+   group_by(PRODUTO) |>
+   dplyr::summarise(
+      MÉDIA = mean(VALORES, na.rm = T),
+      DESV.PAD = sd(VALORES, na.rm = T),
+      Q5 = quantile(VALORES, 0.05, na.rm = T),
+      Q95 = quantile(VALORES, 0.95, na.rm = T)
+   )
+
+DESC <- left_join(models_1, models, by="PRODUTO")
+
+kbl(DESC,table.attr = "style = \"color: black;\"", position = "c") |>
+  kable_styling(font_size = 16, position = "c", full_width = FALSE) |>
+   add_header_above(c(" ", "Descritivas" = 4, "Modelo linear" = 4))
+```
+
+<br>
+<br>
+<br>
+
+### Gráfico 6 - Série histórica da produtividade , produtos de origem vegetal
+   
+***
+   
+```{r Gráfico 6 - Série histórica da produtividade, echo=FALSE, fig.width=11,fig.height=7}
+
+DF_GRAF<-BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM |>
+   filter(VARIAVEIS%in%VARS[9]&ANO>=2007&ANO<=2019&Origem=="Vegetal") |>
+   mutate(DATE=as_date(paste(ANO,"1","1",sep = "-")))
+
+breaks <- seq(0, max(DF_GRAF$VALORES,na.rm=T), by=10)
+
+SH_TP<-ggplot(DF_GRAF, aes(x=DATE, y=VALORES, group=PRODUTO, color=PRODUTO)) +
+   geom_line()+
+   scale_x_date(date_labels="%Y",date_breaks  ="1 year")+
+   scale_y_continuous(breaks = breaks )+
+   theme_bw()+
+   ylab("Toneladas/ha")+
+   xlab("Ano")+
+   guides(fill=guide_legend(title=NULL))+
+   theme(legend.position="bottom",text = element_text(size = 13, face = "bold"),
+         legend.title = element_blank(),
+         axis.title.x = element_text(size = 15),
+         axis.title.y = element_text(size = 20),
+         axis.text.x = element_text(size = 10,angle = 35))
+
+ggplotly(SH_TP)
+
+```
+
+<br>
+
+### Tabela 6 - Modelos de regressão linear da produtividade
+***
+
+```{r eval=TRUE, include=TRUE, echo = FALSE}
+models <- ddply( DF_GRAF , .(PRODUTO), function(x) {
+   t <- lm(x, formula = VALORES ~ DATE)
+   data.frame("VALORES-Intercepto" = coefficients(t)[1], 
+              ANO = coefficients(t)[2], 
+              "PVAL" = summary(t)$coef[2,4],
+              SIGNIFICANCE = if_else(summary(t)$coef[2,4]<0.001,"0 ***",
+                                     if_else(0.001<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.01,"0.001 **",
+                                             if_else(0.01<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.05,"0.01 *",
+                                                     if_else(0.05<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.1,"0.1","1"))))
+   )
+   })
+
+models_1 <- DF_GRAF |>
+   group_by(PRODUTO) |>
+   dplyr::summarise(
+      MÉDIA = mean(VALORES, na.rm = T),
+      DESV.PAD = sd(VALORES, na.rm = T),
+      Q5 = quantile(VALORES, 0.05, na.rm = T),
+      Q95 = quantile(VALORES, 0.95, na.rm = T)
+   )
+
+DESC <- left_join(models_1, models, by="PRODUTO")
+
+kbl(DESC,table.attr = "style = \"color: black;\"", position = "c") |>
+  kable_styling(font_size = 16, position = "c", full_width = FALSE) |>
+   add_header_above(c(" ", "Descritivas" = 4, "Modelo linear" = 4))
+```
+
+<br>
+<br>
+<br>
+
+### Gráfico 7 - Série histórica da área ocupada por cultivos , produtos de origem vegetal
+   
+***
+   
+```{r Gráfico 7 - Série histórica da área ocupada por cultivos, echo=FALSE, fig.width=11,fig.height=7}
+
+DF_GRAF<-BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM |>
+   filter(VARIAVEIS%in%VARS[8]&ANO>=2007&ANO<=2019&Origem=="Vegetal") |>
+   mutate(DATE=as_date(paste(ANO,"1","1",sep = "-")))
+
+breaks <- seq(0, max(DF_GRAF$VALORES,na.rm=T), by=1.25)
+
+SH_TP<-ggplot(DF_GRAF, aes(x=DATE, y=VALORES, group=PRODUTO, color=PRODUTO)) +
+   geom_line()+
+   scale_x_date(date_labels="%Y",date_breaks  ="1 year")+
+   scale_y_continuous(breaks = breaks )+
+   theme_bw()+
+   ylab("Milhões de hectares")+
+   xlab("Ano")+
+   guides(fill=guide_legend(title=NULL))+
+   theme(legend.position="bottom",text = element_text(size = 13, face = "bold"),
+         legend.title = element_blank(),
+         axis.title.x = element_text(size = 15),
+         axis.title.y = element_text(size = 20),
+         axis.text.x = element_text(size = 10,angle = 35))
+
+ggplotly(SH_TP)
+
+```
+
+<br>
+
+### Tabela 7 - Modelos de regressão linear da área ocupada por cultivos
+***
+
+```{r eval=TRUE, include=TRUE, echo = FALSE}
+models <- ddply( DF_GRAF , .(PRODUTO), function(x) {
+   t <- lm(x, formula = VALORES ~ DATE)
+   data.frame("VALORES-Intercepto" = coefficients(t)[1], 
+              ANO = coefficients(t)[2], 
+              "PVAL" = summary(t)$coef[2,4],
+              SIGNIFICANCE = if_else(summary(t)$coef[2,4]<0.001,"0 ***",
+                                     if_else(0.001<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.01,"0.001 **",
+                                             if_else(0.01<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.05,"0.01 *",
+                                                     if_else(0.05<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.1,"0.1","1"))))
+   )
+   })
+
+models_1 <- DF_GRAF |>
+   group_by(PRODUTO) |>
+   dplyr::summarise(
+      MÉDIA = mean(VALORES, na.rm = T),
+      DESV.PAD = sd(VALORES, na.rm = T),
+      Q5 = quantile(VALORES, 0.05, na.rm = T),
+      Q95 = quantile(VALORES, 0.95, na.rm = T)
+   )
+
+DESC <- left_join(models_1, models, by="PRODUTO")
+
+kbl(DESC,table.attr = "style = \"color: black;\"", position = "c") |>
+  kable_styling(font_size = 16, position = "c", full_width = FALSE) |>
+   add_header_above(c(" ", "Descritivas" = 4, "Modelo linear" = 4))
+```
+
+<br>
+<br>
+<br>

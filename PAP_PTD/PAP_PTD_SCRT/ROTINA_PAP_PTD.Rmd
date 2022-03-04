@@ -1,0 +1,1125 @@
+---
+title: "Preços ao produtor e produtividade anual"
+author: "João Pedro Magro"
+date: "Última atualização no dia `r format(Sys.time(), '%d de %B de %Y')`"
+output:
+  html_document:
+    number_sections: true
+  toc: true
+bibliography: REFS_PAP_PTD_PKGS.bib
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE
+                      ,results = 'show'
+                      ,error=FALSE
+                      ,warning=FALSE
+                      ,message=FALSE
+                      , eval = FALSE)
+options(scipen=999)
+```
+
+
+
+<br>
+<br>
+<br>
+
+# Bibliotecas utilizadas {-}
+***
+
+<br>
+
+Ao todo foram utilizadas quatro bibliotecas durante toda a rotina para a aquisição e manipulação dos dados sendo elas a *Sidrar* de @sidrar, *tidyverse* de @tidyverse, *lubridade* de @lubridate e *readxl* de @readxl. Além dessas quatro bibliotecas, foram utilizadas também a biblioteca *KableExtra* de @kableExtra para a confecção de tabelas e a *bibtex* de @bibtex para gerar as citações de corpo e ao final desse texto.
+
+<br>
+
+```{r BIBLIOTECAS, echo=TRUE , eval=TRUE}
+#'*Coleta e manipulação de dados*
+
+library(sidrar)
+library(tidyverse)
+library(lubridate)
+library(readxl)
+
+#'*Bibliografia*
+
+library(kableExtra)
+library(bibtex)
+write.bib(c("sidrar","tidyverse","lubridate","readxl","bibtex","kableExtra"),
+                        file = "REFS_PAP_PTD_PKGS.bib",
+                        append = FALSE,
+                        verbose = TRUE)
+```
+
+<br>
+<br>
+
+# Introdução {-}
+
+<br>
+
+Este documento é a rotina R que descreve a aquisição e manipulação dos dados que compõem o banco de dados de *preços ao produtor e produtividade anual*. Ao todo, o banco de dados é composto por oito tabelas distintas tendo *xxx* variáveis, entre elas as de maior interesse, *valor total da produção*, *valor pago ao produtor* (preço na porteira), *produção total* e *produtividade* de *XXX* produtos diferentes (Tabela 1).   
+A descrição está dividida em *XXX* partes, a primeira relata como se deu a aquisição dos dados - sistemas de aquisição - e a segunda parte explicita a manipulação dos dados - converções e novas indexações.   
+Na tabela 1 são descritas todas as tabelas que compõem o banco de dados com as suas respectivas descrições, listagens de produtos variáveis coletadas e fonte.
+
+<br>
+
+##### Tabela 1 - Referência, descrição, produtos, variáveis coletadas e fonte das tabelas que compõem o banco de dados {-}
+```{r Tabela I, echo=FALSE, eval=TRUE}
+
+TAB_REC_ANUAIS<-tibble(
+   "Referência"=c("5457","74","1092, 1093 e 1094","Boi gordo","Carcaça suína","Frango congelado e resfriado"),
+   "Descrição"=c("Área plantada ou destinada à colheita, área colhida, quantidade produzida, rendimento médio e valor da produção das lavouras temporárias e permanentes",
+                                     "Produção de origem animal, por tipo de produto",
+                                     "Peso total das carcaças dos ____ abatidos, no mês e no trimestre, por tipo de rebanho e tipo de inspeção",
+                                     "Indicador de Preços  do 
+Boi  Gordo  CEPEA/B3, média 
+diária ponderada de preços à vista do boi gordo no Estado de São Paulo.",
+"Animal abatido sem vísceras, pastas, rabo e guargantilha. Preço pagos aos frigoríficos, com ICMS, à vista","Preços do frango inteiro abatido (congelado e resfriado) no estado de São Paulo"),
+"Produtos agrícolas"=c("73 produtos de origem vegetal distintos",
+                       "Leite, Ovos de galinha, Ovos de codorna, Mel de abelha, Casulos do bicho-da-seda, Lã",
+                       "Carcaças bovinas, suínas e de frango",
+                                    "Arroba bovina",
+                                    "Carne suína",
+                                    "Carne de frango"),
+"Variáveis coletadas"=c("Área plantada ou destinada à colheita - Ha, Área colhida - Ha, Quantidade produzida - Toneladas, Rendimento médio da produção - Kg/Ha, Valor da produção - Mil Reais",
+                                               "Produção de origem animal (Varia com o tipo de produto de origem animal) e Valor da produção - Mil Reais",
+                                               "Número de informantes - Unidades, Animais abatidos - Cabeças, Peso total das carcaças - Kg",
+                                               "Reais por arroba",
+                                               "Reais por quilo vivo",
+                                               "Reais por quilo de carcaça"),
+"Fonte"= c(rep("IBGE",3),rep("CEPEA",3)))
+
+kbl(TAB_REC_ANUAIS,table.attr = "style = \"color: black;\"", position = "c")%>%
+  kable_styling(font_size = 16, position = "c", full_width = FALSE)
+
+```
+
+<br>
+<br>
+
+
+# Coleta e processamento de dados - IBGE
+
+***
+
+<br>
+
+## Método de coleta utilizado
+
+<br>
+
+O acesso ao Sistema IBGE de Recuperação Automática (*Sidra*) para recuperar as tabelas que compõem o banco de dados se deu através da biblioteca *Sidrar* @sidrar que, através de um sistema de API acessa o sistema *Sidra* remotamente. Através da função *get_sidra* do pacote é possível acessar o API passando apenas alguns parâmetros para a função. Entretanto, como as tabelas são referentes às edições das pesquisas, - anuais ou trimestrais - se fez necessário criar uma função permita a coleta pudesse ser feita para todo o período analisado - de 1995 até 2020 - de uma só vez, facilitando assim o processamento e indexação das tabelas.
+
+<br>
+
+```{r Função de coleta, echo=TRUE}
+
+#'*Função de coleta*
+COLETA<-function(PR,L,V,GE,CLASSIFIC){
+  
+  if(is_null(CLASSIFIC)){TEST="all"
+  }else{TEST=CLASSIFIC}
+  
+  IPCA_STA<-NULL
+
+  for(P in PR){ 
+    IPCA_UNS<-suppressMessages(get_sidra(x=L, 
+                                         variable = V, 
+                                         geo = GE, 
+                                         period = c(P),
+                                         classific = TEST,
+                                         digits = "max", 
+                                         format = 3, 
+                                         header = T)) 
+    IPCA_STA<-bind_rows(IPCA_STA,IPCA_UNS)}
+  return(IPCA_STA) 
+} 
+```
+
+<br>
+<br>
+
+## Coleta e processamento de dados - IBGE - Tabela 5457 - Produtos de origem vegetal
+
+
+<br>
+
+### Parâmetros SIDRA de coleta
+
+```{r Parâmetros coleta 5457 , echo=TRUE}
+#'*Criação de parâmetros para coleta*
+INFOS<-info_sidra(5457)
+PERIODO<-as.character(1995:2020)
+VARS_5457<-INFOS[["variable"]]%>%
+  filter(cod%in%c(8331,216,214,112,215))
+VARS<-VARS_5457$cod
+rm(VARS_5457,INFOS)
+```
+
+<br>
+<br>
+
+### Recuperação da tabela
+
+<br>
+
+```{r Coleta dos dados 5457 , echo=TRUE}
+#'*Coleta de dados*
+TAB_5457<-COLETA(PERIODO,5457,VARS,"Brazil",CLASSIFIC = NULL)
+
+TAB_5457<-TAB_5457%>%
+  select(3,4,7,8,9)
+
+colnames(TAB_5457)<-c("UN","VALOR","ANO","VAR","PRODUTO")
+
+TAB_5457<-pivot_wider(TAB_5457,id_cols = c('ANO','PRODUTO','UN'),names_from = 'VAR',values_from = 'VALOR')
+```
+
+<br>
+<br>
+<br>
+
+## Coleta e processamento de dados - IBGE - Tabelas 74, 1086, 94 e 915 - Produtos de origem animal
+
+
+<br>
+
+### Coleta e processamento de dados - IBGE - Tabela 74
+
+
+<br>
+
+#### Parâmetros SIDRA de coleta
+
+```{r Parâmetros coleta 74 , echo=TRUE}
+#'*Criação de parâmetros para coleta*
+INFOS<-info_sidra(74)
+PERIODO<-as.character(1995:2020)
+VARS_74<-INFOS[["variable"]]%>%filter(cod%in%c(106,215))
+VARS<-VARS_74$cod
+rm(VARS_74,INFOS)
+```
+
+<br>
+<br>
+
+#### Recuperação da tabela
+
+<br>
+
+```{r Coleta dos dados 74 , echo=TRUE}
+#'*Coleta de dados*
+TAB_74<-COLETA(PERIODO,74,VARS,"Brazil",CLASSIFIC = NULL)
+
+TAB_74<-TAB_74%>%
+  select(3,4,7,8,9)
+
+colnames(TAB_74)<-c("UN","VALOR","ANO","VAR","PRODUTO")
+
+TAB_74<-pivot_wider(TAB_74,id_cols = c('ANO','PRODUTO','UN'),names_from = 'VAR',values_from = 'VALOR')
+```
+
+<br>
+<br>
+<br>
+
+### Coleta e processamento de dados - IBGE - Tabela 1086
+
+   
+<br>
+   
+#### Parâmetros SIDRA de coleta
+   
+```{r Parâmetros coleta 1086, echo=TRUE}
+PERIOD_GEN<-function(AI,AF){
+   anos<-as.character(rep(AI:AF,times=1,each=4))
+   meses_0<-str_pad(c(1:4),2,pad="0")
+   PERIOD <- paste0(anos,meses_0)
+   return(PERIOD)
+}
+
+#'*Criação de parâmetros para coleta*
+INFOS<-info_sidra(1086)
+PERIODO<-PERIOD_GEN(1995,2020)
+VARS_1086<-INFOS[["variable"]]%>%filter(cod%in%c(151,282,283))
+VARS<-VARS_1086$cod
+rm(VARS_1086,INFOS)
+```
+
+<br>
+<br>
+
+#### Recuperação da tabela
+   
+```{r Coleta dos dados 1086 , echo=TRUE}
+#'*Coleta de dados*
+TAB_1086<-COLETA(PERIODO,1086,VARS,"Brazil",CLASSIFIC = NULL)
+
+TAB_1086<-TAB_1086%>%
+   filter(`Referência temporal`=="Total do trimestre"&`Tipo de inspeção`=="Total" )%>%
+   separate(Trimestre,c("Trimestre","RESTO","ANO"),"\\ ",fill="left")%>%
+   group_by(`Unidade de Medida`,Variável,ANO)%>%
+   summarise(VALOR_ANUAL= sum(Valor),
+             VALOR_MED=round(mean(Valor), digits = -0.1))%>%
+   mutate(VALOR=case_when(
+      Variável=="Número de informantes"~as.numeric(VALOR_MED),
+      TRUE~as.numeric(VALOR_ANUAL)
+   ))%>%
+   mutate(ITEM="Leite")%>%
+   select(`Unidade de Medida`,VALOR,ANO,Variável,ITEM)
+
+colnames(TAB_1086)<-c("UN","VALOR","ANO","VAR","PRODUTO")
+
+TAB_1086<-pivot_wider(TAB_1086,id_cols = c('ANO','PRODUTO','UN'),names_from = 'VAR',values_from = 'VALOR')
+```
+
+<br>
+<br>
+
+### Coleta e processamento de dados - IBGE - Tabela 94
+
+   
+<br>
+   
+#### Parâmetros SIDRA de coleta
+   
+```{r Parâmetros coleta 94 , echo=TRUE}
+#'*Criação de parâmetros para coleta*
+INFOS<-info_sidra(94)
+PERIODO<-as.character(1995:2020)
+VARS_94<-INFOS[["variable"]]%>%filter(cod%in%c(107))
+VARS<-VARS_94$cod
+rm(VARS_94,INFOS)
+```
+
+<br>
+<br>
+
+#### Recuperação da tabela
+   
+<br>
+   
+```{r Coleta dos dados 94 , echo=TRUE}
+#'*Coleta de dados*
+TAB_94<-COLETA(PERIODO,94,VARS,"Brazil",CLASSIFIC = NULL)
+
+TAB_94<-TAB_94%>%
+   select(3,4,7,8)%>%
+   mutate(XXX="Leite")
+
+colnames(TAB_94)<-c("UN","VALOR","ANO","VAR","PRODUTO")
+
+TAB_94<-pivot_wider(TAB_94,id_cols = c('ANO','PRODUTO','UN'),names_from = 'VAR',values_from = 'VALOR')
+```
+
+<br>
+<br>
+
+##### Junção - Tabelas 74 , 94 e 1086 - Cadeia do leite
+
+```{r junção das tabelas 74 , 94 e 1086, echo=TRUE}
+
+TAB_COMP_74_94<-full_join(TAB_74, TAB_94, TAB_1086,by=c("ANO","PRODUTO","UN"))
+
+TAB_COMP_74_94_1086<-full_join(TAB_COMP_74_94, TAB_1086,by=c("ANO","PRODUTO","UN"))
+
+```
+
+<br>
+<br>
+
+### Coleta e processamento de dados - IBGE - Tabela 915
+
+   
+<br>
+   
+#### Parâmetros SIDRA de coleta
+   
+```{r Parâmetros coleta 915, echo=TRUE}
+PERIOD_GEN<-function(AI,AF){
+   anos<-as.character(rep(AI:AF,times=1,each=4))
+   meses_0<-str_pad(c(1:4),2,pad="0")
+   PERIOD <- paste0(anos,meses_0)
+   return(PERIOD)
+}
+
+#'*Criação de parâmetros para coleta*
+INFOS<-info_sidra(915)
+PERIODO<-PERIOD_GEN(1995,2020)
+VARS_915<-INFOS[["variable"]]%>%filter(cod%in%c(151,1988,29))
+VARS<-VARS_915$cod
+rm(VARS_915,INFOS)
+```
+
+<br>
+<br>
+
+#### Recuperação da tabela
+
+```{r Coleta dos dados 915 , echo=TRUE}
+#'*Coleta de dados*
+TAB_915<-COLETA(PERIODO,915,VARS,"Brazil",CLASSIFIC = NULL)
+
+TAB_915<-TAB_915%>%
+   filter(`Referência temporal`=="Total do trimestre")%>%
+   separate(Trimestre,c("Trimestre","RESTO","ANO"),"\\ ",fill="left")%>%
+   group_by(`Unidade de Medida`,Variável,ANO)%>%
+   summarise(VALOR_ANUAL= sum(Valor),
+             VALOR_MED=round(mean(Valor), digits = -0.1))%>%
+   mutate(VALOR=case_when(
+      Variável=="Número de informantes"~as.numeric(VALOR_MED),
+      TRUE~as.numeric(VALOR_ANUAL)
+   ))%>%
+   mutate(ITEM="Ovos de galinha")%>%
+   select(`Unidade de Medida`,VALOR,ANO,Variável,ITEM)
+
+colnames(TAB_915)<-c("UN","VALOR","ANO","VAR","PRODUTO")
+
+TAB_915<-pivot_wider(TAB_915,id_cols = c('ANO','PRODUTO','UN'),names_from = 'VAR',values_from = 'VALOR')
+```
+
+<br>
+<br>
+
+##### Junção - Tabelas 74 e 915 - Galinhas poedeiras
+
+```{r junção das tabelas 74 e 915, echo=TRUE}
+TAB_COMP_74_94_1086_915<-full_join(TAB_COMP_74_94_1086,TAB_915,by=c("ANO","PRODUTO","UN"))
+
+TAB_COMP_74_94_1086_915<-TAB_COMP_74_94_1086_915%>%
+  mutate("Número de informantes" = if_else(is.na(`Número de informantes.x`)
+                                           ,`Número de informantes.y`
+                                           ,if_else(is.na(`Número de informantes.y`)
+                                                    ,`Número de informantes.x`,1)), .keep= "unused")
+rm(TAB_74,TAB_1086,TAB_915,TAB_COMP_74_1086)
+```
+
+<br>
+<br>
+<br>
+
+## Coleta e processamento de dados - IBGE - Tabelas 1092, 1093, 1094 e 3939 - Carcaças e rebanho efetivo
+
+
+
+<br>
+
+As tabelas 1092, 1093, 1094 são compostas por dados censitários trimestrais coletados através de entrevistas de  cadastros de informantes registrados durante a fiscalização - federal, estadual ou municipal - de estabelecimentos que efetuam abate de bovinos, suínos ou frangos. Ja a tabela 3939 possui vigência de pesquisa anual.
+
+<br>
+
+### Coleta e processamento de dados - IBGE - Tabela 1092 - Carcaças bovinos
+
+
+<br>
+
+#### Parâmetros SIDRA de coleta
+
+```{r Parâmetros coleta 1092 , echo=TRUE}
+#'*Função geradora de período*
+PERIOD_GEN<-function(AI,AF){
+   anos<-as.character(rep(AI:AF,times=1,each=4))
+   meses_0<-str_pad(c(1:4),2,pad="0")
+   PERIOD <- paste0(anos,meses_0)
+   return(PERIOD)
+}
+
+PERIODO<-PERIOD_GEN(1995,2020)
+
+#'*Criação de parâmetros para coleta*
+INFOS<-info_sidra(1092)
+VARS_1092<-INFOS[["variable"]]%>%filter(cod%in%c(151,284,285))
+VARS<-VARS_1092$cod
+rm(VARS_1092,INFOS)
+```
+
+<br>
+<br>
+
+#### Recuperação da tabela
+
+```{r Coleta dos dados 1092 , echo=TRUE}
+#'*Coleta de dados*
+TAB_1092<-COLETA(PERIODO,1092,VARS,"Brazil",CLASSIFIC = NULL)
+
+TAB_1092<-TAB_1092%>%
+  filter(`Tipo de rebanho bovino`=="Total"&`Referência temporal`=="Total do trimestre"&`Tipo de inspeção`=="Total" )%>%
+  separate(Trimestre,c("Trimestre","RESTO","ANO"),"\\ ",fill="left")%>%
+  group_by(`Unidade de Medida`,Variável,ANO)%>%
+  summarise(VALOR_ANUAL= sum(Valor),
+            VALOR_MED=round(mean(Valor), digits = -0.1))%>%
+  mutate(VALOR=case_when(
+    Variável=="Número de informantes"~as.numeric(VALOR_MED),
+    TRUE~as.numeric(VALOR_ANUAL)
+  ))%>%
+  mutate(ITEM="Carcaça bovino")%>%
+  select(ANO,`Unidade de Medida`,Variável,VALOR,ITEM)
+
+colnames(TAB_1092)<-c("ANO","UN","VAR","VALOR","PRODUTO")
+
+TAB_1092<-pivot_wider(TAB_1092,id_cols = c('ANO','PRODUTO','UN'),names_from = 'VAR',values_from = 'VALOR')
+```
+
+<br>
+<br>
+
+### Coleta e processamento de dados - IBGE - Tabela 1093 - Carcaças suínos
+
+
+<br>
+
+#### Parâmetros SIDRA de coleta
+
+```{r Parâmetros coleta 1093 , echo=TRUE}
+#'*Função geradora de período*
+PERIODO<-PERIOD_GEN(1995,2020)
+
+#'*Criação de parâmetros para coleta*
+INFOS<-info_sidra(1093)
+VARS_1093<-INFOS[["variable"]]%>%filter(cod%in%c(151,284,285))
+VARS<-VARS_1093$cod
+rm(VARS_1093,INFOS)
+```
+
+<br>
+<br>
+
+#### Recuperação da tabela
+
+```{r Coleta dos dados 1093 , echo=TRUE}
+#'*Coleta de dados*
+TAB_1093<-COLETA(PERIODO,1093,VARS,"Brazil",CLASSIFIC = NULL)
+
+TAB_1093<-TAB_1093%>%
+  filter(`Referência temporal`=="Total do trimestre"&`Tipo de inspeção`=="Total" )%>%
+  separate(Trimestre,c("Trimestre","RESTO","ANO"),"\\ ",fill="left")%>%
+  group_by(`Unidade de Medida`,Variável,ANO)%>%
+  summarise(VALOR_ANUAL= sum(Valor),
+            VALOR_MED=round(mean(Valor), digits = -0.1))%>%
+  mutate(VALOR=case_when(
+    Variável=="Número de informantes"~as.numeric(VALOR_MED),
+    TRUE~as.numeric(VALOR_ANUAL)
+  ))%>%
+  mutate(ITEM="Carcaça suíno")%>%
+  select(ANO,`Unidade de Medida`,Variável,VALOR,ITEM)
+
+colnames(TAB_1093)<-c("ANO","UN","VAR","VALOR","PRODUTO")
+
+TAB_1093<-pivot_wider(TAB_1093,id_cols = c('ANO','PRODUTO','UN'),names_from = 'VAR',values_from = 'VALOR')
+```
+
+
+<br>
+<br>
+
+### Coleta e processamento de dados - IBGE - Tabela 1094 - Carcaças frango
+
+
+<br>
+
+#### Parâmetros SIDRA de coleta
+
+```{r Parâmetros coleta 1094 , echo=TRUE}
+#'*Função geradora de período*
+PERIOD_GEN<-function(AI,AF){
+   anos<-as.character(rep(AI:AF,times=1,each=4))
+   meses_0<-str_pad(c(1:4),2,pad="0")
+   PERIOD <- paste0(anos,meses_0)
+   return(PERIOD)
+}
+
+PERIODO<-PERIOD_GEN(1995,2020)
+
+#'*Criação de parâmetros para coleta*
+INFOS<-info_sidra(1094)
+VARS_1094<-INFOS[["variable"]]%>%filter(cod%in%c(151,284,285))
+VARS<-VARS_1094$cod
+rm(VARS_1094,INFOS)
+```
+
+<br>
+<br>
+
+#### Recuperação da tabela
+```{r Coleta dos dados 1094 , echo=TRUE}
+#'*Coleta de dados*
+TAB_1094<-COLETA(PERIODO,1094,VARS,"Brazil",CLASSIFIC = NULL)
+
+TAB_1094<-TAB_1094%>%
+  filter(`Referência temporal`=="Total do trimestre"&`Tipo de inspeção`=="Total" )%>%
+  separate(Trimestre,c("Trimestre","RESTO","ANO"),"\\ ",fill="left")%>%
+  group_by(`Unidade de Medida`,Variável,ANO)%>%
+  summarise(VALOR_ANUAL= sum(Valor),
+            VALOR_MED=round(mean(Valor), digits = -0.1))%>%
+  mutate(VALOR=case_when(
+    Variável=="Número de informantes"~as.numeric(VALOR_MED),
+    TRUE~as.numeric(VALOR_ANUAL)
+  ))%>%
+  mutate(ITEM="Carcaça frango")%>%
+  select(ANO,`Unidade de Medida`,Variável,VALOR,ITEM)
+
+colnames(TAB_1094)<-c("ANO","UN","VAR","VALOR","PRODUTO")
+
+TAB_1094<-pivot_wider(TAB_1094,id_cols = c('ANO','PRODUTO','UN'),names_from = 'VAR',values_from = 'VALOR')
+```
+
+<br>
+<br>
+
+
+### Coleta e processamento de dados - IBGE - Tabela 3939 - Rebanho efetivo
+
+   
+<br>
+   
+#### Parâmetros SIDRA de coleta
+   
+```{r Parâmetros coleta 3939, echo=TRUE}
+PERIOD_GEN<-function(AI,AF){
+   anos<-as.character(rep(AI:AF,times=1,each=2))
+   meses_0<-str_pad(c(1:2),2,pad="0")
+   PERIOD <- paste0(anos,meses_0)
+   return(PERIOD)
+}
+
+#'*Criação de parâmetros para coleta*
+INFOS<-info_sidra(3939)
+PERIODO<-as.character(1995:2020)
+VARS_3939<-INFOS[["variable"]]%>%filter(cod%in%c(105))
+VARS<-VARS_3939$cod
+rm(VARS_3939,INFOS)
+```
+
+<br>
+<br>
+
+#### Recuperando a tabela
+
+```{r Coleta dos dados 3939 , echo=TRUE}
+#'*Coleta de dados*
+TAB_3939<-COLETA(PERIODO,3939,VARS,"Brazil",CLASSIFIC = NULL)
+
+TAB_3939<-TAB_3939%>%
+   filter(`Tipo de rebanho`%in%c("Bovino","Suíno - total","Galináceos - total"))%>%
+   mutate(`Tipo de rebanho`=case_when(`Tipo de rebanho`=="Suíno - total"~"Carcaça suíno",
+                                      `Tipo de rebanho`=="Galináceos - total"~"Carcaça frango",
+                                      TRUE~"Carcaça bovino"))%>%
+   select(`Unidade de Medida`,Valor,Ano,Variável,`Tipo de rebanho`)
+
+colnames(TAB_3939)<-c("UN","VALOR","ANO","VAR","PRODUTO")
+
+TAB_3939<-pivot_wider(TAB_3939,id_cols = c('ANO','PRODUTO','UN'),names_from = 'VAR',values_from = 'VALOR')
+```
+
+<br>
+<br>
+
+
+
+#### Junção dos dados das tabelas de Abate e rebanho (1092, 1093, 1094, 3939) - IBGE
+
+```{r indexação 92 93 94, echo=TRUE }
+
+TAB_92_93_94<-bind_rows(TAB_1092,TAB_1093,TAB_1094)
+
+TAB_COMP_92_93_94_3939<-full_join(TAB_92_93_94,TAB_3939,by=c("ANO","PRODUTO","UN"))
+
+rm(TAB_92_93_94,TAB_3939,TAB_1092,TAB_1093,TAB_1094)
+```
+
+<br>
+<br>
+<br>
+
+## Salvando todas as tabelas
+
+```{r salvando os DFs, echo=TRUE}
+saveRDS(object=TAB_5457,file="~/R_CORE/GitHub/IAIABR/PAP_PTD/PAP_PTD_DADOS/IBGE_TABS_ST1/TAB_5457.rds" )
+saveRDS(object=TAB_COMP_74_94_1086_915 ,file="~/R_CORE/GitHub/IAIABR/PAP_PTD/PAP_PTD_DADOS/IBGE_TABS_ST1/TAB_COMP_74_94_1086_915.rds" )
+saveRDS(object=TAB_COMP_92_93_94_3939 ,file="~/R_CORE/GitHub/IAIABR/PAP_PTD/PAP_PTD_DADOS/IBGE_TABS_ST1/TAB_COMP_92_93_94_3939.rds" )
+
+```
+
+<br>
+<br>
+<br>
+
+## Junção de todas as tabelas - IBGE
+
+```{r junção todas as tabelas,echo=TRUE}
+#'*Inclusão de indexadores das planilhas*
+
+TAB_5457<-TAB_5457%>%
+  mutate(IDENTIF="5457")
+
+TAB_COMP_74_94_1086_915<-TAB_COMP_74_94_1086_915%>%
+  mutate(IDENTIF="74, 1086, 915")
+
+TAB_COMP_92_93_94_3939<-TAB_COMP_92_93_94_3939%>%
+  mutate(IDENTIF="92, 93, 94, 3939")
+
+
+#'*Junção dos DF's*
+
+TAB_COMP_IBGE_PAP_PTD<-full_join(TAB_5457,TAB_COMP_74_94_1086_915, by=c("ANO","PRODUTO","Valor da produção","IDENTIF","UN"))
+TAB_COMP_IBGE_PAP_PTD_W<-full_join(TAB_COMP_IBGE_PAP_PTD, TAB_COMP_92_93_94_3939 , by=c("ANO","PRODUTO","Número de informantes","IDENTIF","UN"))
+
+TAB_COMP_IBGE_PAP_PTD_W<-TAB_COMP_IBGE_PAP_PTD_W%>%
+  select(c(9,1,2,3,4:8,10:19))
+
+TAB_COMP_IBGE_PAP_PTD_L<-pivot_longer(TAB_COMP_IBGE_PAP_PTD_W,cols = c(5:19), names_to = "VARIAVEL", values_to = "VALORES", values_drop_na = TRUE)
+
+
+VARS<-TAB_COMP_IBGE_PAP_PTD_L%>%
+  distinct(IDENTIF,UN,VARIAVEL)
+
+saveRDS(object=TAB_COMP_IBGE_PAP_PTD_W ,file="~/R_CORE/GitHub/IAIABR/PAP_PTD/PAP_PTD_DADOS/IBGE_TABS_ST1/TAB_COMP_IBGE_PAP_PTD_W.rds" )
+
+saveRDS(object=TAB_COMP_IBGE_PAP_PTD_L ,file="~/R_CORE/GitHub/IAIABR/PAP_PTD/PAP_PTD_DADOS/IBGE_TABS_ST1/TAB_COMP_IBGE_PAP_PTD_L.rds" )
+
+saveRDS(object=VARS ,file="~/R_CORE/GitHub/IAIABR/PAP_PTD/PAP_PTD_DADOS/IBGE_TABS_ST1/TAB_COMP_IBGE_VARS.rds" )
+
+```
+
+
+<br>
+<br>
+<br>
+
+# Coleta e processamento de dados - CEPEA
+***
+
+<br>
+
+As tabelas de quantidade de carcaças e peso total abatido (1092, 1093, 1094) do IBGE, são as únicas que não trazem consigo o valor total anual da produção agrícola, variável de grande importância uma vez que ela será utilizada posteriormente para o cálculo de preço ao produtor médio anual. Para sanar esse déficite de informações foram coletadas tabelas de preço médio anual do Centro de Estudos Avançados em Economia Aplicada (CEPEA), ao todo quatro tabelas referentes à abates de bovinos, suínos e frangos foram coletadas.   
+Como o sistema de recuperação do CEPEA não possui um API gratuíto ainda a coleta de dados foi feita através do site da instituição (*https://www.cepea.esalq.usp.br/br/consultas-ao-banco-de-dados-do-site.aspx*).   
+Após a coleta dos dados, estes sofreram algumas poucas alterações, estas foram necessárias pricipalmente para que os dados tivessem a mesma escala temporal - anual. 
+
+<br>
+<br>
+<br>
+
+## Processamento de dados - CEPEA - Tabela "INDICADOR DO BOI GORDO CEPEA/B3" - Preço da arroba da carcaça bovina
+
+<br>
+
+```{r CEPEA B3, echo=TRUE}
+#'*Leitura da tabela de preços ao produtor Cepea/B3*
+CEPEA_BOV_ANO <- read_excel(path ="~/R_CORE/GitHub/IAIABR/PAP_PTD/PAP_PTD_DADOS/CEPEA_TABS_RAW/ABATES/CEPEA_BOV_ANO.xls", 
+    skip = 3)
+
+#'*Alteração da escala temporal*
+CEPEA_BOV_ANO<-CEPEA_BOV_ANO%>%
+  mutate(DATE=dmy(Data),.keep="unused")%>%
+  mutate(ANO=year(DATE))%>%
+  select(ANO,DATE,1)%>%
+  group_by(ANO)%>%
+  mutate("Preço ao produtor"= mean(`À vista R$`/15))%>%
+  select(ANO,`Preço ao produtor`)%>%
+  distinct(ANO,`Preço ao produtor`)%>%
+  mutate(ANO=as.character(ANO))%>%
+  mutate(UN="R$/Kg")%>%
+  mutate(IDENTIF="Cepea/B3 - Bovino")%>%
+  mutate(PRODUTO="Carcaça bovino")%>%
+  select(IDENTIF,ANO,PRODUTO,UN,`Preço ao produtor`)
+
+```
+
+<br>
+<br>
+<br>
+
+## Processamento de dados - CEPEA - Tabela "PREÇOS DA CARCAÇA SUÍNA ESPECIAL" - Preço do Kg de carcaça suína
+
+<br>
+
+```{r CEPEA SUÍNO, echo=TRUE}
+#'*Leitura da tabela de preços ao produtor da carcaça suína especial Cepea*
+CEPEA_SUI_ANO <- read_excel(path ="~/R_CORE/GitHub/IAIABR/PAP_PTD/PAP_PTD_DADOS/CEPEA_TABS_RAW/ABATES/CEPEA_SUI_ANO.xls", 
+    skip = 3)
+
+#'*Alteração da escala temporal*
+CEPEA_SUI_ANO<-CEPEA_SUI_ANO%>%
+  mutate(DATE=dmy(Data),.keep="unused")%>%
+  mutate(ANO=year(DATE))%>%
+  select(ANO,DATE,1)%>%
+  group_by(ANO)%>%
+  mutate("Preço ao produtor"= mean(Média))%>%
+  select(ANO,`Preço ao produtor`)%>%
+  distinct(ANO,`Preço ao produtor`)%>%
+  mutate(ANO=as.character(ANO))%>%
+  mutate(UN="R$/Kg")%>%
+  mutate(IDENTIF="Cepea - Suíno")%>%
+  mutate(PRODUTO="Carcaça suíno")%>%
+  select(IDENTIF,ANO,PRODUTO,UN,`Preço ao produtor`)
+
+
+```
+
+<br>
+<br>
+<br>
+
+## Processamento de dados - CEPEA - Tabelas "PREÇOS DO FRANGO CONGELADO CEPEA/ESALQ - ESTADO SP" e "PREÇOS DO FRANGO RESFRIADO CEPEA/ESALQ - ESTADO SP" - Preço do Kg de carcaça de frango
+
+<br>
+
+Os dados de preço de frango recuperados do Cepea são provenientes do estado de São Paulo e são subdivididos entre frango "resfriado" e "congelado", com o intuito de produzir apenas um indicador foi feita uma média aritimética entre os dois valores diários recuperados.
+
+<br>
+<br>
+
+```{r CEPEA FRANGOS, echo=TRUE}
+#'*Leitura da tabela de preços ao produtor da carcaça de frango congelada e resfriada Cepea*
+CEPEA_FR_CONG_ANO <- read_excel(path ="~/R_CORE/GitHub/IAIABR/PAP_PTD/PAP_PTD_DADOS/CEPEA_TABS_RAW/ABATES/CEPEA_FR_CONG_ANO.xls", 
+    skip = 3)
+CEPEA_FR_RESF_ANO <- read_excel(path ="~/R_CORE/GitHub/IAIABR/PAP_PTD/PAP_PTD_DADOS/CEPEA_TABS_RAW/ABATES/CEPEA_FR_RESF_ANO.xls", 
+    skip = 3)
+CEPEA_FR_CONG_ANO <-CEPEA_FR_CONG_ANO%>%
+   select(1:2)
+CEPEA_FR_RESF_ANO <-CEPEA_FR_RESF_ANO%>%
+   select(1:2)
+
+colnames(CEPEA_FR_CONG_ANO)<-c("Data","CONG")
+colnames(CEPEA_FR_RESF_ANO)<-c("Data","RESF")
+
+CEPEA_FR_ANO<-full_join(CEPEA_FR_CONG_ANO,CEPEA_FR_RESF_ANO,by="Data")
+
+CEPEA_FR_ANO<-CEPEA_FR_ANO%>%
+   mutate(Média=(CONG+RESF)/2)%>%
+   select(1,4)
+
+#'*Alteração da escala temporal*
+CEPEA_FR_ANO<-CEPEA_FR_ANO%>%
+  mutate(DATE=dmy(Data),.keep="unused")%>%
+  mutate(ANO=year(DATE))%>%
+  select(ANO,DATE,1)%>%
+  group_by(ANO)%>%
+  mutate("Preço ao produtor"= mean(Média))%>%
+  select(ANO,`Preço ao produtor`)%>%
+  distinct(ANO,`Preço ao produtor`)%>%
+  mutate(ANO=as.character(ANO))%>%
+  mutate(UN="R$/Kg")%>%
+  mutate(IDENTIF="Cepea - Frango")%>%
+  mutate(PRODUTO="Carcaça frango")%>%
+  select(IDENTIF,ANO,PRODUTO,UN,`Preço ao produtor`)
+
+```
+
+<br>
+<br>
+<br>
+
+## Junção das três tabelas de preços - CEPEA
+
+<br>
+
+```{r Junção CEPEA}
+
+#'*Juntando os bancos de dados*
+CEPEA_PP_CARC_ANO_W<-bind_rows(CEPEA_BOV_ANO, CEPEA_SUI_ANO, CEPEA_FR_ANO)
+
+CEPEA_PP_CARC_ANO_L<-pivot_longer(CEPEA_PP_CARC_ANO,cols = 5, names_to = "VARIAVEL", values_to = "VALORES", values_drop_na = TRUE)
+
+
+#'*Salvando os bancos de dados*
+saveRDS(object=CEPEA_PP_CARC_ANO_W ,file="~/R_CORE/GitHub/IAIABR/PAP_PTD/PAP_PTD_DADOS/CEPEA_TABS_RAW/CEPEA_PP_CARC_ANO_W.rds" )
+saveRDS(object=CEPEA_PP_CARC_ANO_L ,file="~/R_CORE/GitHub/IAIABR/PAP_PTD/PAP_PTD_DADOS/CEPEA_TABS_RAW/CEPEA_PP_CARC_ANO_L.rds" )
+
+```
+
+
+<br>
+<br>
+<br>
+
+# Banco de dados para análise - Indexação, seleção, cálculo de variáveis e deflacionamento
+***
+
+<br>
+
+Efetuada a coleta de dados, o próximo passo é a indexação conjunta dos dados e elaboração do banco de dados para análise. Num primeiro momento (Até o dia 19/12/2021) o interesse é de se analisar as variáveis de *Valor total da produção* em milhões de reais, *Preço ao produtor* em R$/tonelada, *Quantidade total produzida* em milhões de toneladas, *Produtividade* em toneladas por hectare e *Área ocupada* em hectares.   
+Por uma questão de falta de dados já foi possível levantar as produtividades de quase todas os produtos, os únicos produtos que ainda não possuem essa dimensão de análise são as carcaças (de todas as categorias).   
+Na tabela *XXX* estão descritos os produtos selecionados para análise;
+
+<br>
+
+##### Tabela *XXX* - Produtos selecionados para análise {-}
+
+<br>
+
+```{r Tabela XXX, echo=FALSE}
+
+PROX<-tibble(
+  Produtos=c("Arroz (em casca)","Banana (cacho)","Batata-inglesa","Café (em grão) Total","Cebola","Feijão (em grão)", "Laranja","Mandioca","Milho (em grão)","Soja (em grão)","Tomate","Trigo (em grão)"
+  ,"Carcaça bovino","Leite","Carcaça suíno","Carcaça frango","Ovos de galinha"),
+  Origem=c(rep("Vegetal",12),rep("Animal",5))
+)
+
+
+```
+
+<br>
+
+Feitas as considerações, o processo seguinte se dá em três passos; transformação de algumas dimensões (Leite e Ovos); junção dos bancos de dados IBGE e CEPEA e a seleção das variáveis de interesse e cálculo das variáveis dependentes.
+
+<br>
+<br>
+<br>
+
+## Junção dos bancos de dados - IBGE e CEPEA
+
+```{r Jun IBGE CEPEA, echo=TRUE}
+#'*Carregamento dos bancos de dados*
+TAB_COMP_IBGE_PAP_PTD_L <- readRDS("~/R_CORE/GitHub/IAIABR/PAP_PTD/PAP_PTD_DADOS/IBGE_TABS_ST1/TAB_COMP_IBGE_PAP_PTD_L.rds")
+CEPEA_PP_CARC_ANO_L <- readRDS("~/R_CORE/GitHub/IAIABR/PAP_PTD/PAP_PTD_DADOS/CEPEA_TABS_RAW/CEPEA_PP_CARC_ANO_L.rds")
+
+#'*Junção dos bancos de dados*
+BD_COMP_PAP_PTD_ST2_L<-bind_rows(TAB_COMP_IBGE_PAP_PTD_L,CEPEA_PP_CARC_ANO_L)
+
+#'*Salvando o banco de dados novo*
+saveRDS(object=BD_COMP_PAP_PTD_ST2_L ,file="~/R_CORE/GitHub/IAIABR/PAP_PTD/PAP_PTD_DADOS/BD_COMP_PAP_PTD_ST2_L.rds" )
+
+#'*Filtrando o banco de dados para produtos e variáveis de interesse*
+
+VAR_PROX<-c("Área colhida",
+            "Rendimento médio da produção",
+            "Valor da produção",
+            "Quantidade produzida",
+            "Produção de origem animal",
+            "Vacas ordenhadas",
+            "Número de cabeças de galinhas poedeiras nos estabelecimentos agropecuários",
+            "Peso total das carcaças",
+            "Preço ao produtor"
+            )
+
+BD_COMP_PAP_PTD_ST3_L<-BD_COMP_PAP_PTD_ST2_L%>%
+  filter(PRODUTO%in%PROX$Produtos&VARIAVEL%in%VAR_PROX)
+
+rm(TAB_COMP_IBGE_PAP_PTD_L,CEPEA_PP_CARC_ANO_L,PROX,VAR_PROX,BD_COMP_PAP_PTD_ST2_L)
+```
+
+<br>
+<br>
+<br>
+
+## Transformação das unidades - *Leite* e *Ovo de galinha*
+
+<br>
+
+Como os dados de produção dos produtos *Leite* e *Ovo de galinha* são registrados em Mil litros e Mil dúzias , respectivamente, se faz necessário converter suas unidades para a mesma base de análise, em toneladas.
+
+<br>
+
+#### Equações de conversão {-}
+
+<br>
+
+##### Equação 1 - Conversão do *Leite* {-}
+
+<br>
+
+$$Leite \ _{Toneladas} = \frac{Produção \ total \ * \ Densidade \ do \ leite}{1000}$$
+
+<br>
+<br>
+
+##### Equação 2 - Conversão do *Ovo de galinha* {-}
+
+<br>
+
+$$Ovo \ de \ galinha \ _{Toneladas} = \frac{Produção \ total \ * \ Peso \ médio \ da \ dúzia \ de \ ovos}{1000}$$
+
+<br>
+<br>
+<br>
+
+```{r Transformação de unidades, echo=TRUE}
+BD_COMP_PAP_PTD_ST4_L<-BD_COMP_PAP_PTD_ST3_L%>%
+  mutate(VALORES=case_when(UN=="Mil litros"&PRODUTO=="Leite"~((VALORES*1024)/1000),
+                           UN=="Mil dúzias"&PRODUTO=="Ovos de galinha"~((VALORES*630)/1000),
+         TRUE~VALORES))%>%
+  mutate(UN=case_when(UN=="Mil litros"~"Toneladas",
+                           UN=="Mil dúzias"~"Toneladas",
+                      TRUE~UN))
+```
+
+
+<br>
+<br>
+<br>
+
+## Cálculo das variáveis dependentes
+
+<br>
+
+Ao todo apenas três variáveis vão ser calculadas a partir dos dados, a variável *Preço ao produtor* em R$/tonelada tem o seguinte cálculo:
+
+##### Equção 3 - Preço ao produtor {-}
+
+<br>
+
+$$Preço \ ao \ produtor _\frac{RS}{Tonelada} = \frac{Valor \ total \ da \ produção \ _{Mil \ reais}}{Quantidade \ total \ produzida \ 
+_{Toneladas}}*1000$$
+
+<br>
+
+Este cálculo foi aplicado para todos os produtos de origem vegetal e para Leite e Ovos de galinha, para os produtos carcaça esta variável foi adquirida nos bancos de dados do CEPEA. Após a indexação, para as carcaças, foi calculado o *Valor total da produção* da seguinte forma:
+
+<br>
+
+```{r preço ao produtor , echo=TRUE}
+BD_COMP_PAP_PTD_ST5_W<-pivot_wider(BD_COMP_PAP_PTD_ST4_L, id_cols = c(2:3),values_from = VALORES, names_from = VARIAVEL )
+
+#'*Calculando Preço ao produtor*
+
+BD_COMP_PAP_PTD_ST5_W<-BD_COMP_PAP_PTD_ST5_W%>%
+  mutate(`Quantidade produzida`=case_when(
+    PRODUTO=="Leite"~`Produção de origem animal`,
+    PRODUTO=="Ovos de galinha"~`Produção de origem animal`,
+    str_detect(PRODUTO,"Carcaça")~`Peso total das carcaças`,
+    TRUE~`Quantidade produzida`))%>%
+  mutate(`Preço ao produtor`=case_when(
+    PRODUTO=="Leite"~(`Valor da produção`/`Quantidade produzida`)*1000,
+    PRODUTO=="Ovos de galinha"~(`Valor da produção`/`Quantidade produzida`)*1000,
+    str_detect(PRODUTO,"Carcaça")~(`Preço ao produtor`*1000),
+    TRUE~(`Valor da produção`/`Quantidade produzida`)*1000))
+
+```
+
+<br>
+
+##### Equação 4 - Valor total da produção - Carcaças {-}
+
+<br>
+
+$$ Valor \ total \ da \ produção \ _{Milhões \ de \ reais} = Peso \ total \ das \ carcaças \ * \ Preço \ ao \ produtor $$
+<br>
+
+```{r valor total da produção, echo=TRUE}
+#'*Cálculo do valor total da produção para carcaças*
+BD_COMP_PAP_PTD_ST5_W<-BD_COMP_PAP_PTD_ST5_W%>%
+  mutate(`Quantidade produzida`=case_when(str_detect(PRODUTO,"Carcaça")~ `Quantidade produzida`/1000,TRUE~`Quantidade produzida`))%>%
+  mutate(`Valor da produção`=case_when(str_detect(PRODUTO,"Carcaça")~ (`Quantidade produzida`*`Preço ao produtor`/1000),
+                                       TRUE~`Valor da produção`))%>%
+  mutate(`Valor da produção`=(`Valor da produção`/1000000))
+```
+
+
+<br>
+
+A última variável calculada foi a *Produtividade* para os produtos Leite e Ovo de galinha. A equação utilizada foi:
+
+<br>
+
+##### Equação 5 - Produtividade - Leite e Ovo de galinha {-}
+
+<br>
+
+$$ Produtividade = \frac{Total \ produzido}{Total \ anual \ de \ unidades \ produtivas} $$
+<br>
+
+```{r produtividade, echo=TRUE}
+
+#'*Calculando a produtividade*
+BD_COMP_PAP_PTD_ST5_ANA_W<-BD_COMP_PAP_PTD_ST5_W%>%
+  mutate("Unidades produtivas"=case_when(
+    PRODUTO=="Leite"~`Vacas ordenhadas`,
+    PRODUTO=="Ovos de galinha"~ `Número de cabeças de galinhas poedeiras nos estabelecimentos agropecuários`,
+    TRUE~`Área colhida`
+  ))%>%
+  select(ANO,PRODUTO, `Valor da produção`, `Preço ao produtor`, `Quantidade produzida`,`Unidades produtivas`)%>%
+  mutate(Produtividade= `Quantidade produzida`/`Unidades produtivas`)%>%
+  filter(ANO<2021)
+```
+
+<br>
+<br>
+<br>
+
+## Deflacionamento das séries
+<br>
+
+Ao todo foram utilizados dois índices para deflacionar as séries foram o *IGP-M/FGV*, *IPCA/IBGE*, como os valores monetarios computados nos bancos de dados são grandes optou-se por coletar os índices de correção da *Calculadora cidadã* do Banco Central. Todos os valores foram considerados a valores correntes do dia 31 de dezembro e foram corrigidos para o dia 31 de dezembro de 2020.
+
+<br>
+
+```{r Deflacionamento das séries, echo=TRUE}
+#'*Lendo a tabela com os índices de correção*
+IND_CORR_IGMP_BCB <- read_excel("~/R_CORE/GitHub/IAIABR/PAP_PTD/PAP_PTD_DADOS/INDICES/IND_CORR_IGMP_BCB.xlsx", 
+    range = "A1:D27", 
+    col_types = c("text", "skip", "numeric","numeric"))
+
+#'*Deflacionando as séries*
+BD_COMP_PAP_PTD_ST5_ANA_W<-left_join(BD_COMP_PAP_PTD_ST5_ANA_W,IND_CORR_IGMP_BCB,by=c("ANO"="ANO_REF"))
+
+# IPCA ----
+
+BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IPCA<-BD_COMP_PAP_PTD_ST5_ANA_W%>%
+  mutate(`Valor da produção`=`Valor da produção`*IPCA)%>%
+  mutate(`Preço ao produtor`=`Preço ao produtor`*IPCA)%>%
+  mutate(`Unidades produtivas`=`Unidades produtivas`/1000000)%>%
+  mutate(`Quantidade produzida`=`Quantidade produzida`/1000000)
+
+# IGPM ----
+
+BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IGPM<-BD_COMP_PAP_PTD_ST5_ANA_W%>%
+  mutate(`Valor da produção`=`Valor da produção`*IGPM)%>%
+  mutate(`Preço ao produtor`=`Preço ao produtor`*IGPM)%>%
+  mutate(`Unidades produtivas`=`Unidades produtivas`/1000000)%>%
+  mutate(`Quantidade produzida`=`Quantidade produzida`/1000000)
+  
+```
+
+
+<br>
+<br>
+<br>
+
+## Salvando os bancos de dados com valores deflacionados
+
+```{r}
+#'*Salvando o banco de dados*
+saveRDS(object=BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IGPM ,file="~/R_CORE/GitHub/IAIABR/PAP_PTD/PAP_PTD_DADOS/BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IGPM.rds" )
+saveRDS(object=BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IPCA ,file="~/R_CORE/GitHub/IAIABR/PAP_PTD/PAP_PTD_DADOS/BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IPCA.rds" )
+
+
+rm(BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IGPM, BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IPCA)
+
+Colnames_IPCA <- c("ANO", "PRODUTO", "Valor da produção - IPCA", "Preço ao produtor - IPCA", "Quantidade produzida", "Unidades produtivas", "Produtividade", "IGPM", "IPCA")
+
+Colnames_IGPM <- c("ANO", "PRODUTO", "Valor da produção - IGPM", "Preço ao produtor - IGPM", "Quantidade produzida", "Unidades produtivas", "Produtividade", "IGPM", "IPCA")
+
+BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IPCA <- readRDS("~/R_CORE/GitHub/IAIABR/PAP_PTD/PAP_PTD_DADOS/BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IPCA.rds")
+
+colnames(BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IPCA) <- Colnames_IPCA
+
+BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IGPM <- readRDS("~/R_CORE/GitHub/IAIABR/PAP_PTD/PAP_PTD_DADOS/BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IGPM.rds")
+
+colnames(BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IGPM) <- Colnames_IGPM
+
+
+BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IPCA_IGPM <- cbind(BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IPCA[,1:4],BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IGPM[,3:4],BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IPCA[,5:9])
+
+saveRDS(object=BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IPCA_IGPM ,file="~/R_CORE/GitHub/IAIABR/PAP_PTD/PAP_PTD_DADOS/BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IPCA_IGPM.rds" )
+```
+
+<br>
+<br>
+
+# Conclusão
+***
+
+<br>
+<br>
+<br>
+<br>
+
+### Referências {-}
+
+<br>
+<br>
+
+
