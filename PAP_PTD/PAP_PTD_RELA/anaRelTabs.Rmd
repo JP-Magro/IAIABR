@@ -35,11 +35,15 @@ library(patchwork)
 #'*Análises*
 library(car)
 library(tseries)
+library(lmtest)
+
+coeftest(model, vcov = vcovHC(model, type = "HC0"))
+
 
 ```
 
 ```{r DADOS, echo=FALSE}
-BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IPCA_IGPM <- readRDS("~/R_CORE/GitHub/IAIABR/PAP_PTD/PAP_PTD_DADOS/BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IPCA_IGPM.rds")
+BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IPCA_IGPM <- readRDS("C:/Users/Giovana/Documents/GitHub/IAIABr/PAP_PTD/PAP_PTD_DADOS/BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IPCA_IGPM.rds")
 
 BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM<-pivot_longer(BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IPCA_IGPM,
                                              names_to = "VARIAVEIS",
@@ -56,33 +60,30 @@ BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM<-left_join(BD_COMP_PAP_PTD_ST_DEFLA_ANA
 
 VARS <- colnames(BD_COMP_PAP_PTD_ST_DEFLA_ANA_W_IPCA_IGPM)
 
+BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM <- BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM |>
+   mutate(ANO = as.numeric(ANO))
+
+
 rm(PROX)
 ```
 
+<br>
+<br>
 
-
-### Valor total da produção {.tabset}
 ***
 
-#### Gráficos {.tabset}
+# Variáveis {.tabset}
+***
 
-##### Toda série {.tabset}
+## Valor total da produção {.tabset}
 
-###### Série histórica do valor total da produção - Corrigidos pelo IPCA
+###  Gráfico - Série histórica do valor total da produção - Corrigidos pelo IPCA
 ***
 
 ```{r echo=FALSE, fig.width=11,fig.height=7}
 
 DF_GRAF<-BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM |>
    filter(VARIAVEIS%in%VARS[3]&ANO>=2007&ANO<=2019) |>
-   mutate(DATE=as_date(paste(ANO,"1","1",sep = "-")))
-
-DF_GRAF_1<-BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM |>
-   filter(VARIAVEIS%in%VARS[3]&ANO>=2007&ANO<=2013) |>
-   mutate(DATE=as_date(paste(ANO,"1","1",sep = "-")))
-
-DF_GRAF_2<-BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM |>
-   filter(VARIAVEIS%in%VARS[3]&ANO>=2013&ANO<=2019) |>
    mutate(DATE=as_date(paste(ANO,"1","1",sep = "-")))
 
 breaks <- seq(0, max(DF_GRAF$VALORES,na.rm=T), by=10)
@@ -109,88 +110,12 @@ SH_PLT<-ggplot(DF_GRAF, aes(x=DATE, y=VALORES, group=PRODUTO, color=PRODUTO)) +
 ggplotly(SH_PLT)
 ```
 
-
-##### Série dividida {.tabset}
-
-```{r echo=FALSE, fig.width=11,fig.height=7}
-
-DF_GRAF_1<-BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM |>
-   filter(VARIAVEIS%in%VARS[3]&ANO>=2007&ANO<=2013&
-             !is.na(VALORES)&PRODUTO != "Carcaça suíno") |>
-   mutate(DATE=as_date(paste(ANO,"1","1",sep = "-")))
-
-DF_GRAF_2<-BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM |>
-   filter(VARIAVEIS%in%VARS[3]&
-             ANO>=2013&ANO<=2019&
-             !is.na(VALORES)) |>
-   mutate(DATE=as_date(paste(ANO,"1","1",sep = "-")))
-
-breaks <- seq(0, max(DF_GRAF$VALORES,na.rm=T), by=10)
-
-# PLOT 1 ----
-SH_PLT_1<-ggplot(DF_GRAF_1, aes(x=DATE, y=VALORES, group=PRODUTO, color=PRODUTO)) +
-   geom_line()+
-   scale_x_date(date_labels="%Y",date_breaks  ="1 year")+
-   scale_y_continuous("Bilhões de reais",
-                      limits = c(0,max(DF_GRAF$VALORES)+1),
-                      label = function(VALORES){return(paste("R$",VALORES))},
-                      breaks = breaks)+
-   theme_bw()+
-   ylab("Milhões de reais")+
-   xlab("Ano")+
-   guides(fill=guide_legend(title=NULL))+
-   theme(legend.position="bottom",text = element_text(size = 13, face = "bold"),
-         legend.title = element_blank(),
-         axis.title.x = element_text(size = 15),
-         axis.title.y = element_text(size = 20),
-         axis.text.x = element_text(size = 10,angle = 35))
-
-# PLOT 1 ----
-SH_PLT_2<-ggplot(DF_GRAF_2, aes(x=DATE, y=VALORES, group=PRODUTO, color=PRODUTO)) +
-   geom_line()+
-   scale_x_date(date_labels="%Y",date_breaks  ="1 year")+
-   scale_y_continuous("Bilhões de reais",
-                      limits = c(0,max(DF_GRAF$VALORES)+1),
-                      label = function(VALORES){return(paste("R$",VALORES))},
-                      breaks = breaks)+
-   theme_bw()+
-   ylab("Milhões de reais")+
-   xlab("Ano")+
-   guides(fill=guide_legend(title=NULL))+
-   theme(legend.position="bottom",text = element_text(size = 13, face = "bold"),
-         legend.title = element_blank(),
-         axis.title.x = element_text(size = 15),
-         axis.title.y = element_text(size = 20),
-         axis.text.x = element_text(size = 10,angle = 35))
-
-```
-
-###### Série histórica do valor total da produção (2007 - 2013) - Corrigidos pelo IPCA {.tabset}
-***
-
-```{r echo=FALSE, fig.width=11,fig.height=7}
-ggplotly(SH_PLT_1)
-```
-
-
-###### Série histórica do valor total da produção (2013 - 2019) - Corrigidos pelo IPCA {.tabset}
-***
-
-```{r echo=FALSE, fig.width=11,fig.height=7}
-ggplotly(SH_PLT_2)
-```
-
-
-#### Tabelas {.tabset}
-
-##### Toda série {.tabset}
-
-###### Estatísticas descritivas e Modelos de regressão linear do valor total da produção - Corrigidos pelo IPCA
+### Tabelas -Estatísticas descritivas e Modelos de regressão linear do valor total da produção - Corrigidos pelo IPCA
 ***
 
 ```{r eval=TRUE, include=TRUE, echo = FALSE}
 models <- ddply( DF_GRAF , .(PRODUTO), function(x) {
-   t <- lm(x, formula = VALORES ~ DATE)
+   t <- lm(x, formula = VALORES ~ ANO)
    data.frame("Intercepto" = coefficients(t)[1], 
               Ano = coefficients(t)[2], 
               "PVAL" = summary(t)$coef[2,4],
@@ -198,7 +123,8 @@ models <- ddply( DF_GRAF , .(PRODUTO), function(x) {
                                      if_else(0.001<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.01,"0.001 **",
                                              if_else(0.01<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.05,"0.01 *",
                                                      if_else(0.05<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.1,"0.1","1")))),
-              "Durbin Watson - 5%" = if_else(durbinWatsonTest( model = t)[["p"]] < 0.05, "Resíduos possuem correlação", "Resíduos sem correlação")
+              "Durbin Watson" = durbinWatsonTest( model = t)[["dw"]],
+              "Durbin Watson - 5%" = if_else(durbinWatsonTest( model = t)[["p"]] < 0.05, "Com correlação", "Sem correlação")
    )
    })
 
@@ -209,8 +135,8 @@ models_1 <- DF_GRAF |>
       DESV.PAD = sd(VALORES, na.rm = T),
       Q5 = quantile(VALORES, 0.05, na.rm = T),
       Q95 = quantile(VALORES, 0.95, na.rm = T),
-      "LAG" = kpss.test(VALORES, null="Level")[2][[1]],
-      "KPSS - 5%" = if_else(kpss.test(VALORES, null="Level")[3][[1]] < 0.05, "Apresenta tendência", "Sem tendência")
+      "KPSS" = kpss.test(VALORES, null="Level")[1][[1]],
+      "KPSS - 5%" = if_else(kpss.test(VALORES, null="Level")[3][[1]] < 0.05, "Com tendência", "Sem tendência")
    )
 
 DESC <- left_join(models_1, models, by="PRODUTO")
@@ -220,7 +146,7 @@ DESC <- DESC |>
 
 colNam <- colnames(DESC)
 
-colNam <- c(colNam[1:12],"Durbin Watson - 5%")
+colNam <- c(colNam[1:12],"Durbin Watson", "Durbin Watson - 5%")
 
 colnames(DESC) <- colNam
 
@@ -230,141 +156,41 @@ DESC <- DESC |>
           Q5 = round(Q5, 3),
           Q95 = round(Q95, 3),
           Intercepto = round(Intercepto, 3),
-          Ano = round(Ano, 6),
-          PVAL = round(PVAL, 5))
+          Ano = round(Ano, 5),
+          PVAL = round(PVAL, 5),
+          KPSS = round(KPSS, 3),
+          `Durbin Watson` = round(`Durbin Watson`, 3))
 
-kbl(DESC,table.attr = "style = \"color: black;\"", position = "c") |>
+# Tabela resumida ----
+
+descTab <- DESC |>
+   select(PRODUTO, Ano, PVAL, Significância, "Durbin Watson", "Durbin Watson - 5%", "KPSS", "KPSS - 5%")
+
+colnames(descTab) <- c("Produto", "Ano", "P-Value", "Significância", "Durbin Watson", "Durbin Watson - 5%", "KPSS", "KPSS - 5%")
+
+kbl(descTab,table.attr = "style = \"color: black;\"", position = "c") |>
   kable_styling(font_size = 16, position = "c", full_width = TRUE) |>
-   add_header_above(c(" ", "Descritivas" = 5, "Teste KPSS" = 2, "Modelo linear" = 5)) |>
-   column_spec(6, image = spec_hist(split(DF_GRAF$VALORES,DF_GRAF$PRODUTO),same_lim = FALSE))
-```
+   add_header_above(c("Resumo das análises" = 8)) |>
+   footnote(general = "Na análise de KPSS e Durbin Watson foram utilizadas variáveis LAG de dois período.")
 
-##### Série dividida {.tabset}
+# Tabela descritiva ----
+descTab <- DESC |>
+   select(PRODUTO, MÉDIA, DESV.PAD, Q5, Q95, Histograma)|>
+   mutate("Box plot" = " ")
 
-###### Estatísticas descritivas e Modelos de regressão linear do valor total da produção (2007 - 2013) - Corrigidos pelo IPCA {.tabset}
-***
+colnames(descTab) <- c("Produto", "Média", "Desvio padrão", "Quantil - 5%", "Quantil - 95%", "Histograma", "Boxplot")
 
-```{r eval=TRUE, include=TRUE, echo = FALSE}
-models <- ddply( DF_GRAF_1 , .(PRODUTO), function(x) {
-   t <- lm(x, formula = VALORES ~ DATE)
-   data.frame("Intercepto" = coefficients(t)[1], 
-              Ano = coefficients(t)[2], 
-              "PVAL" = summary(t)$coef[2,4],
-              Significância = if_else(summary(t)$coef[2,4]<0.001,"0 ***",
-                                      if_else(0.001<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.01,"0.001 **",
-                                              if_else(0.01<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.05,"0.01 *",
-                                                      if_else(0.05<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.1,"0.1","1")))),
-              "Durbin Watson - 5%" = if_else(durbinWatsonTest( model = t)[["p"]] < 0.05, "Resíduos possuem correlação", "Resíduos sem correlação")
-   )
-})
+kbl(descTab,table.attr = "style = \"color: black;\"", position = "c") |>
+  kable_styling(font_size = 16, position = "c", full_width = TRUE) |>
+   add_header_above(c("Estatísticas descritivas" = 7)) |>
+   column_spec(6, image = spec_hist(split(DF_GRAF$VALORES,DF_GRAF$PRODUTO),same_lim = FALSE)) |>
+   column_spec(7, image = spec_boxplot(split(DF_GRAF$VALORES,DF_GRAF$PRODUTO),same_lim = FALSE))
 
-models_1 <- DF_GRAF_1 |>
-   group_by(PRODUTO) |>
-   dplyr::summarise(
-      MÉDIA = mean(VALORES, na.rm = T),
-      DESV.PAD = sd(VALORES, na.rm = T),
-      Q5 = quantile(VALORES, 0.05, na.rm = T),
-      Q95 = quantile(VALORES, 0.95, na.rm = T),
-      "LAG" = kpss.test(VALORES, null="Level")[2][[1]],
-      "KPSS - 5%" = if_else(kpss.test(VALORES, null="Level")[3][[1]] < 0.05, "Apresenta tendência", "Sem tendência")
-   )
-
-DESC <- left_join(models_1, models, by="PRODUTO")
-
-DESC <- DESC |>
-   mutate("Histograma"="", .after="Q95")
-
-colNam <- colnames(DESC)
-
-colNam <- c(colNam[1:12],"Durbin Watson - 5%")
-
-colnames(DESC) <- colNam
-
-DESC <- DESC |>
-   mutate(MÉDIA = round(MÉDIA, 3),
-          DESV.PAD = round(DESV.PAD, 3),
-          Q5 = round(Q5, 3),
-          Q95 = round(Q95, 3),
-          Intercepto = round(Intercepto, 3),
-          Ano = round(Ano, 6),
-          PVAL = round(PVAL, 5))
-
-kbl(DESC,table.attr = "style = \"color: black;\"", position = "c") |>
-   kable_styling(font_size = 16, position = "c", full_width = TRUE) |>
-   add_header_above(c(" ", "Descritivas" = 5, "Teste KPSS" = 2, "Modelo linear" = 5)) |>
-   column_spec(6, image = spec_hist(split(DF_GRAF_1$VALORES,DF_GRAF_1$PRODUTO),same_lim = FALSE))
-```
-
-###### Estatísticas descritivas e Modelos de regressão linear do valor total da produção (2013 - 2019) - Corrigidos pelo IPCA {.tabset}
-***
-
-```{r eval=TRUE, include=TRUE, echo = FALSE}
-models <- ddply( DF_GRAF_2 , .(PRODUTO), function(x) {
-   t <- lm(x, formula = VALORES ~ DATE)
-   data.frame("Intercepto" = coefficients(t)[1], 
-              Ano = coefficients(t)[2], 
-              "PVAL" = summary(t)$coef[2,4],
-              Significância = if_else(summary(t)$coef[2,4]<0.001,"0 ***",
-                                      if_else(0.001<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.01,"0.001 **",
-                                              if_else(0.01<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.05,"0.01 *",
-                                                      if_else(0.05<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.1,"0.1","1")))),
-              "Durbin Watson - 5%" = if_else(durbinWatsonTest( model = t)[["p"]] < 0.05, "Resíduos possuem correlação", "Resíduos sem correlação")
-   )
-})
-
-models_1 <- DF_GRAF_2 |>
-   group_by(PRODUTO) |>
-   dplyr::summarise(
-      MÉDIA = mean(VALORES, na.rm = T),
-      DESV.PAD = sd(VALORES, na.rm = T),
-      Q5 = quantile(VALORES, 0.05, na.rm = T),
-      Q95 = quantile(VALORES, 0.95, na.rm = T),
-      "LAG" = kpss.test(VALORES, null="Level")[2][[1]],
-      "KPSS - 5%" = if_else(kpss.test(VALORES, null="Level")[3][[1]] < 0.05, "Apresenta tendência", "Sem tendência")
-   )
-
-DESC <- left_join(models_1, models, by="PRODUTO")
-
-DESC <- DESC |>
-   mutate("Histograma"="", .after="Q95")
-
-colNam <- colnames(DESC)
-
-colNam <- c(colNam[1:12],"Durbin Watson - 5%")
-
-colnames(DESC) <- colNam
-
-DESC <- DESC |>
-   mutate(MÉDIA = round(MÉDIA, 3),
-          DESV.PAD = round(DESV.PAD, 3),
-          Q5 = round(Q5, 3),
-          Q95 = round(Q95, 3),
-          Intercepto = round(Intercepto, 3),
-          Ano = round(Ano, 6),
-          PVAL = round(PVAL, 5))
-
-kbl(DESC,table.attr = "style = \"color: black;\"", position = "c") |>
-   kable_styling(font_size = 16, position = "c", full_width = TRUE) |>
-   add_header_above(c(" ", "Descritivas" = 5, "Teste KPSS" = 2, "Modelo linear" = 5)) |>
-   column_spec(6, image = spec_hist(split(DF_GRAF_2$VALORES,DF_GRAF_2$PRODUTO),same_lim = FALSE))
 ```
 
 
-<br>
-
-***
-
-<br>
-<br>
-
-### Preço ao produtor {.tabset}
-***
-
-#### Gráficos {.tabset}
-
-##### Toda série {.tabset}
-
-###### Série histórica do preço ao produtor - Corrigidos pelo IPCA
+## Preço ao produtor {.tabset}
+### Gráfico -Série histórica do preço ao produtor - Corrigidos pelo IPCA
 ***
 
 ```{r echo=FALSE, fig.width=11,fig.height=7}
@@ -395,96 +221,23 @@ SH_PLT<-ggplot(DF_GRAF, aes(x=DATE, y=VALORES, group=PRODUTO, color=PRODUTO)) +
 ggplotly(SH_PLT)
 ```
 
-
-##### Série dividida {.tabset}
-
-```{r echo=FALSE, fig.width=11,fig.height=7}
-
-DF_GRAF_1<-BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM |>
-   filter(VARIAVEIS%in%VARS[3]&ANO>=2007&ANO<=2013&
-             !is.na(VALORES)&PRODUTO !="Carcaça suíno") |>
-   mutate(DATE=as_date(paste(ANO,"1","1",sep = "-")))
-
-DF_GRAF_2<-BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM |>
-   filter(VARIAVEIS%in%VARS[3]&
-             ANO>=2013&ANO<=2019&
-             !is.na(VALORES)) |>
-   mutate(DATE=as_date(paste(ANO,"1","1",sep = "-")))
-
-breaks <- seq(0, max(DF_GRAF$VALORES,na.rm=T), by=500)
-
-# PLOT 1 ----
-SH_PLT_1<-ggplot(DF_GRAF_1, aes(x=DATE, y=VALORES, group=PRODUTO, color=PRODUTO)) +
-   geom_line()+
-   scale_x_date(date_labels="%Y",date_breaks  ="1 year")+
-   scale_y_continuous("R$/Tonelada",
-                      limits = c(0,max(DF_GRAF$VALORES)+1),
-                      label = function(VALORES){return(paste("R$",VALORES))},
-                      breaks = breaks)+
-   theme_bw()+
-   xlab("Ano")+
-   guides(fill=guide_legend(title=NULL))+
-   theme(legend.position="bottom",text = element_text(size = 13, face = "bold"),
-         legend.title = element_blank(),
-         axis.title.x = element_text(size = 15),
-         axis.title.y = element_text(size = 20),
-         axis.text.x = element_text(size = 10,angle = 35))
-
-# PLOT 1 ----
-SH_PLT_2<-ggplot(DF_GRAF_2, aes(x=DATE, y=VALORES, group=PRODUTO, color=PRODUTO)) +
-   geom_line()+
-   scale_x_date(date_labels="%Y",date_breaks  ="1 year")+
-   scale_y_continuous("R$/Tonelada",
-                      limits = c(0,max(DF_GRAF$VALORES)+1),
-                      label = function(VALORES){return(paste("R$",VALORES))},
-                      breaks = breaks)+
-   theme_bw()+
-   xlab("Ano")+
-   guides(fill=guide_legend(title=NULL))+
-   theme(legend.position="bottom",text = element_text(size = 13, face = "bold"),
-         legend.title = element_blank(),
-         axis.title.x = element_text(size = 15),
-         axis.title.y = element_text(size = 20),
-         axis.text.x = element_text(size = 10,angle = 35))
-
-```
-
-###### Série histórica do preço ao produtor (2007 - 2013) - Corrigidos pelo IPCA {.tabset}
-***
-   
-```{r echo=FALSE, fig.width=11,fig.height=7}
-ggplotly(SH_PLT_1)
-```
-
-
-###### Série histórica do preço ao produtor (2013 - 2019) - Corrigidos pelo IPCA {.tabset}
-***
-   
-```{r echo=FALSE, fig.width=11,fig.height=7}
-ggplotly(SH_PLT_2)
-```
-
-
-#### Tabelas {.tabset}
-
-##### Toda série {.tabset}
-
-###### Estatísticas descritivas e Modelos de regressão linear do preço ao produtor - Corrigidos pelo IPCA
+### Tabelas - Estatísticas descritivas e Modelos de regressão linear do preço ao produtor - Corrigidos pelo IPCA
 ***
    
 ```{r eval=TRUE, include=TRUE, echo = FALSE}
 models <- ddply( DF_GRAF , .(PRODUTO), function(x) {
-   t <- lm(x, formula = VALORES ~ DATE)
+   t <- lm(x, formula = VALORES ~ ANO)
    data.frame("Intercepto" = coefficients(t)[1], 
               Ano = coefficients(t)[2], 
               "PVAL" = summary(t)$coef[2,4],
               Significância = if_else(summary(t)$coef[2,4]<0.001,"0 ***",
-                                      if_else(0.001<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.01,"0.001 **",
-                                              if_else(0.01<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.05,"0.01 *",
-                                                      if_else(0.05<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.1,"0.1","1")))),
-              "Durbin Watson - 5%" = if_else(durbinWatsonTest( model = t)[["p"]] < 0.05, "Resíduos possuem correlação", "Resíduos sem correlação")
+                                     if_else(0.001<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.01,"0.001 **",
+                                             if_else(0.01<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.05,"0.01 *",
+                                                     if_else(0.05<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.1,"0.1","1")))),
+              "Durbin Watson" = durbinWatsonTest( model = t)[["dw"]],
+              "Durbin Watson - 5%" = if_else(durbinWatsonTest( model = t)[["p"]] < 0.05, "Com correlação", "Sem correlação")
    )
-})
+   })
 
 models_1 <- DF_GRAF |>
    group_by(PRODUTO) |>
@@ -493,8 +246,8 @@ models_1 <- DF_GRAF |>
       DESV.PAD = sd(VALORES, na.rm = T),
       Q5 = quantile(VALORES, 0.05, na.rm = T),
       Q95 = quantile(VALORES, 0.95, na.rm = T),
-      "LAG" = kpss.test(VALORES, null="Level")[2][[1]],
-      "KPSS - 5%" = if_else(kpss.test(VALORES, null="Level")[3][[1]] < 0.05, "Apresenta tendência", "Sem tendência")
+      "KPSS" = kpss.test(VALORES, null="Level")[1][[1]],
+      "KPSS - 5%" = if_else(kpss.test(VALORES, null="Level")[3][[1]] < 0.05, "Com tendência", "Sem tendência")
    )
 
 DESC <- left_join(models_1, models, by="PRODUTO")
@@ -504,7 +257,7 @@ DESC <- DESC |>
 
 colNam <- colnames(DESC)
 
-colNam <- c(colNam[1:12],"Durbin Watson - 5%")
+colNam <- c(colNam[1:12],"Durbin Watson", "Durbin Watson - 5%")
 
 colnames(DESC) <- colNam
 
@@ -514,140 +267,40 @@ DESC <- DESC |>
           Q5 = round(Q5, 3),
           Q95 = round(Q95, 3),
           Intercepto = round(Intercepto, 3),
-          Ano = round(Ano, 6),
-          PVAL = round(PVAL, 5))
+          Ano = round(Ano, 5),
+          PVAL = round(PVAL, 5),
+          KPSS = round(KPSS, 3),
+          `Durbin Watson` = round(`Durbin Watson`, 3))
 
-kbl(DESC,table.attr = "style = \"color: black;\"", position = "c") |>
-   kable_styling(font_size = 16, position = "c", full_width = TRUE) |>
-   add_header_above(c(" ", "Descritivas" = 5, "Teste KPSS" = 2, "Modelo linear" = 5)) |>
-   column_spec(6, image = spec_hist(split(DF_GRAF$VALORES,DF_GRAF$PRODUTO),same_lim = FALSE))
+# Tabela resumida ----
+
+descTab <- DESC |>
+   select(PRODUTO, Ano, PVAL, Significância, "Durbin Watson", "Durbin Watson - 5%", "KPSS", "KPSS - 5%")
+
+colnames(descTab) <- c("Produto", "Ano", "P-Value", "Significância", "Durbin Watson", "Durbin Watson - 5%", "KPSS", "KPSS - 5%")
+
+kbl(descTab,table.attr = "style = \"color: black;\"", position = "c") |>
+  kable_styling(font_size = 16, position = "c", full_width = TRUE) |>
+   add_header_above(c("Resumo das análises" = 8)) |>
+   footnote(general = "Na análise de KPSS e Durbin Watson foram utilizadas variáveis LAG de dois período.")
+
+# Tabela descritiva ----
+descTab <- DESC |>
+   select(PRODUTO, MÉDIA, DESV.PAD, Q5, Q95, Histograma)|>
+   mutate("Box plot" = " ")
+
+colnames(descTab) <- c("Produto", "Média", "Desvio padrão", "Quantil - 5%", "Quantil - 95%", "Histograma", "Boxplot")
+
+kbl(descTab,table.attr = "style = \"color: black;\"", position = "c") |>
+  kable_styling(font_size = 16, position = "c", full_width = TRUE) |>
+   add_header_above(c("Estatísticas descritivas" = 7)) |>
+   column_spec(6, image = spec_hist(split(DF_GRAF$VALORES,DF_GRAF$PRODUTO),same_lim = FALSE)) |>
+   column_spec(7, image = spec_boxplot(split(DF_GRAF$VALORES,DF_GRAF$PRODUTO),same_lim = FALSE))
+
 ```
 
-##### Série dividida {.tabset}
-
-###### Estatísticas descritivas e Modelos de regressão linear do preço ao produtor (2007 - 2013) - Corrigidos pelo IPCA {.tabset}
-***
-   
-```{r eval=TRUE, include=TRUE, echo = FALSE}
-models <- ddply( DF_GRAF_1 , .(PRODUTO), function(x) {
-   t <- lm(x, formula = VALORES ~ DATE)
-   data.frame("Intercepto" = coefficients(t)[1], 
-              Ano = coefficients(t)[2], 
-              "PVAL" = summary(t)$coef[2,4],
-              Significância = if_else(summary(t)$coef[2,4]<0.001,"0 ***",
-                                      if_else(0.001<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.01,"0.001 **",
-                                              if_else(0.01<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.05,"0.01 *",
-                                                      if_else(0.05<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.1,"0.1","1")))),
-              "Durbin Watson - 5%" = if_else(durbinWatsonTest( model = t)[["p"]] < 0.05, "Resíduos possuem correlação", "Resíduos sem correlação")
-   )
-})
-
-models_1 <- DF_GRAF_1 |>
-   group_by(PRODUTO) |>
-   dplyr::summarise(
-      MÉDIA = mean(VALORES, na.rm = T),
-      DESV.PAD = sd(VALORES, na.rm = T),
-      Q5 = quantile(VALORES, 0.05, na.rm = T),
-      Q95 = quantile(VALORES, 0.95, na.rm = T),
-      "LAG" = kpss.test(VALORES, null="Level")[2][[1]],
-      "KPSS - 5%" = if_else(kpss.test(VALORES, null="Level")[3][[1]] < 0.05, "Apresenta tendência", "Sem tendência")
-   )
-
-DESC <- left_join(models_1, models, by="PRODUTO")
-
-DESC <- DESC |>
-   mutate("Histograma"="", .after="Q95")
-
-colNam <- colnames(DESC)
-
-colNam <- c(colNam[1:12],"Durbin Watson - 5%")
-
-colnames(DESC) <- colNam
-
-DESC <- DESC |>
-   mutate(MÉDIA = round(MÉDIA, 3),
-          DESV.PAD = round(DESV.PAD, 3),
-          Q5 = round(Q5, 3),
-          Q95 = round(Q95, 3),
-          Intercepto = round(Intercepto, 3),
-          Ano = round(Ano, 6),
-          PVAL = round(PVAL, 5))
-
-kbl(DESC,table.attr = "style = \"color: black;\"", position = "c") |>
-   kable_styling(font_size = 16, position = "c", full_width = TRUE) |>
-   add_header_above(c(" ", "Descritivas" = 5, "Teste KPSS" = 2, "Modelo linear" = 5)) |>
-   column_spec(6, image = spec_hist(split(DF_GRAF_1$VALORES,DF_GRAF_1$PRODUTO),same_lim = FALSE))
-```
-
-###### Estatísticas descritivas e Modelos de regressão linear do preço ao produtor (2013 - 2019) - Corrigidos pelo IPCA {.tabset}
-***
-   
-```{r eval=TRUE, include=TRUE, echo = FALSE}
-models <- ddply( DF_GRAF_2 , .(PRODUTO), function(x) {
-   t <- lm(x, formula = VALORES ~ DATE)
-   data.frame("Intercepto" = coefficients(t)[1], 
-              Ano = coefficients(t)[2], 
-              "PVAL" = summary(t)$coef[2,4],
-              Significância = if_else(summary(t)$coef[2,4]<0.001,"0 ***",
-                                      if_else(0.001<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.01,"0.001 **",
-                                              if_else(0.01<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.05,"0.01 *",
-                                                      if_else(0.05<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.1,"0.1","1")))),
-              "Durbin Watson - 5%" = if_else(durbinWatsonTest( model = t)[["p"]] < 0.05, "Resíduos possuem correlação", "Resíduos sem correlação")
-   )
-})
-
-models_1 <- DF_GRAF_2 |>
-   group_by(PRODUTO) |>
-   dplyr::summarise(
-      MÉDIA = mean(VALORES, na.rm = T),
-      DESV.PAD = sd(VALORES, na.rm = T),
-      Q5 = quantile(VALORES, 0.05, na.rm = T),
-      Q95 = quantile(VALORES, 0.95, na.rm = T),
-      "LAG" = kpss.test(VALORES, null="Level")[2][[1]],
-      "KPSS - 5%" = if_else(kpss.test(VALORES, null="Level")[3][[1]] < 0.05, "Apresenta tendência", "Sem tendência")
-   )
-
-DESC <- left_join(models_1, models, by="PRODUTO")
-
-DESC <- DESC |>
-   mutate("Histograma"="", .after="Q95")
-
-colNam <- colnames(DESC)
-
-colNam <- c(colNam[1:12],"Durbin Watson - 5%")
-
-colnames(DESC) <- colNam
-
-DESC <- DESC |>
-   mutate(MÉDIA = round(MÉDIA, 3),
-          DESV.PAD = round(DESV.PAD, 3),
-          Q5 = round(Q5, 3),
-          Q95 = round(Q95, 3),
-          Intercepto = round(Intercepto, 3),
-          Ano = round(Ano, 6),
-          PVAL = round(PVAL, 5))
-
-kbl(DESC,table.attr = "style = \"color: black;\"", position = "c") |>
-   kable_styling(font_size = 16, position = "c", full_width = TRUE) |>
-   add_header_above(c(" ", "Descritivas" = 5, "Teste KPSS" = 2, "Modelo linear" = 5)) |>
-   column_spec(6, image = spec_hist(split(DF_GRAF_2$VALORES,DF_GRAF_2$PRODUTO),same_lim = FALSE))
-```
-
-<br>
-
-***
-
-<br>
-<br>
-
-### Quantidade total produzida {.tabset}
-***
-
-#### Gráficos {.tabset}
-
-##### Toda série {.tabset}
-
-###### Série histórica da quantidade total produzida
+## Quantidade total produzida {.tabset}
+### Gráfico - Série histórica da quantidade total produzida
 ***
    
 ```{r echo=FALSE, fig.width=11,fig.height=7}
@@ -677,80 +330,12 @@ ggplotly(SH_PLT)
 ```
 
 
-##### Série dividida {.tabset}
-
-```{r echo=FALSE, fig.width=11,fig.height=7}
-
-DF_GRAF_1<-BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM |>
-   filter(VARIAVEIS%in%VARS[7]&ANO>=2007&ANO<=2013&
-             !is.na(VALORES)&PRODUTO !="Carcaça suíno") |>
-   mutate(DATE=as_date(paste(ANO,"1","1",sep = "-")))
-
-DF_GRAF_2<-BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM |>
-   filter(VARIAVEIS%in%VARS[7]&
-             ANO>=2013&ANO<=2019&
-             !is.na(VALORES)) |>
-   mutate(DATE=as_date(paste(ANO,"1","1",sep = "-")))
-
-breaks <- seq(0, max(DF_GRAF$VALORES,na.rm=T), by=10)
-
-# PLOT 1 ----
-SH_PLT_1<-ggplot(DF_GRAF_1, aes(x=DATE, y=VALORES, group=PRODUTO, color=PRODUTO)) +
-   geom_line()+
-   scale_x_date(date_labels="%Y",date_breaks  ="1 year")+
-   scale_y_continuous(breaks = breaks )+
-   theme_bw()+
-   ylab("Milhões de toneladas")+
-   xlab("Ano")+
-   guides(fill=guide_legend(title=NULL))+
-   theme(legend.position="bottom",text = element_text(size = 13, face = "bold"),
-         legend.title = element_blank(),
-         axis.title.x = element_text(size = 15),
-         axis.title.y = element_text(size = 20),
-         axis.text.x = element_text(size = 10,angle = 35))
-# PLOT 1 ----
-SH_PLT_2<-ggplot(DF_GRAF_2, aes(x=DATE, y=VALORES, group=PRODUTO, color=PRODUTO)) +
-   geom_line()+
-   scale_x_date(date_labels="%Y",date_breaks  ="1 year")+
-   scale_y_continuous(breaks = breaks )+
-   theme_bw()+
-   ylab("Milhões de toneladas")+
-   xlab("Ano")+
-   guides(fill=guide_legend(title=NULL))+
-   theme(legend.position="bottom",text = element_text(size = 13, face = "bold"),
-         legend.title = element_blank(),
-         axis.title.x = element_text(size = 15),
-         axis.title.y = element_text(size = 20),
-         axis.text.x = element_text(size = 10,angle = 35))
-
-```
-
-###### Série histórica da quantidade total produzida (2007 - 2013) {.tabset}
-***
-   
-```{r echo=FALSE, fig.width=11,fig.height=7}
-ggplotly(SH_PLT_1)
-```
-
-
-###### Série histórica da quantidade total produzida (2013 - 2019) {.tabset}
-***
-   
-```{r echo=FALSE, fig.width=11,fig.height=7}
-ggplotly(SH_PLT_2)
-```
-
-
-#### Tabelas {.tabset}
-
-##### Toda série {.tabset}
-
-###### Estatísticas descritivas e Modelos de regressão linear da quantidade total produzida
+### tabelas - Estatísticas descritivas e Modelos de regressão linear da quantidade total produzida
 ***
    
 ```{r eval=TRUE, include=TRUE, echo = FALSE}
 models <- ddply( DF_GRAF , .(PRODUTO), function(x) {
-   t <- lm(x, formula = VALORES ~ DATE)
+   t <- lm(x, formula = VALORES ~ ANO)
    data.frame("Intercepto" = coefficients(t)[1], 
               Ano = coefficients(t)[2], 
               "PVAL" = summary(t)$coef[2,4],
@@ -799,131 +384,9 @@ kbl(DESC,table.attr = "style = \"color: black;\"", position = "c") |>
    column_spec(6, image = spec_hist(split(DF_GRAF$VALORES,DF_GRAF$PRODUTO),same_lim = FALSE))
 ```
 
-##### Série dividida {.tabset}
+## Produtividade {.tabset}
 
-###### Estatísticas descritivas e Modelos de regressão linear da quantidade total produzida (2007 - 2013) {.tabset}
-***
-   
-```{r eval=TRUE, include=TRUE, echo = FALSE}
-models <- ddply( DF_GRAF_1 , .(PRODUTO), function(x) {
-   t <- lm(x, formula = VALORES ~ DATE)
-   data.frame("Intercepto" = coefficients(t)[1], 
-              Ano = coefficients(t)[2], 
-              "PVAL" = summary(t)$coef[2,4],
-              Significância = if_else(summary(t)$coef[2,4]<0.001,"0 ***",
-                                      if_else(0.001<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.01,"0.001 **",
-                                              if_else(0.01<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.05,"0.01 *",
-                                                      if_else(0.05<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.1,"0.1","1")))),
-              "Durbin Watson - 5%" = if_else(durbinWatsonTest( model = t)[["p"]] < 0.05, "Resíduos possuem correlação", "Resíduos sem correlação")
-   )
-})
-
-models_1 <- DF_GRAF_1 |>
-   group_by(PRODUTO) |>
-   dplyr::summarise(
-      MÉDIA = mean(VALORES, na.rm = T),
-      DESV.PAD = sd(VALORES, na.rm = T),
-      Q5 = quantile(VALORES, 0.05, na.rm = T),
-      Q95 = quantile(VALORES, 0.95, na.rm = T),
-      "LAG" = kpss.test(VALORES, null="Level")[2][[1]],
-      "KPSS - 5%" = if_else(kpss.test(VALORES, null="Level")[3][[1]] < 0.05, "Apresenta tendência", "Sem tendência")
-   )
-
-DESC <- left_join(models_1, models, by="PRODUTO")
-
-DESC <- DESC |>
-   mutate("Histograma"="", .after="Q95")
-
-colNam <- colnames(DESC)
-
-colNam <- c(colNam[1:12],"Durbin Watson - 5%")
-
-colnames(DESC) <- colNam
-
-DESC <- DESC |>
-   mutate(MÉDIA = round(MÉDIA, 3),
-          DESV.PAD = round(DESV.PAD, 3),
-          Q5 = round(Q5, 3),
-          Q95 = round(Q95, 3),
-          Intercepto = round(Intercepto, 3),
-          Ano = round(Ano, 6),
-          PVAL = round(PVAL, 5))
-
-kbl(DESC,table.attr = "style = \"color: black;\"", position = "c") |>
-   kable_styling(font_size = 16, position = "c", full_width = TRUE) |>
-   add_header_above(c(" ", "Descritivas" = 5, "Teste KPSS" = 2, "Modelo linear" = 5)) |>
-   column_spec(6, image = spec_hist(split(DF_GRAF_1$VALORES,DF_GRAF_1$PRODUTO),same_lim = FALSE))
-```
-
-###### Estatísticas descritivas e Modelos de regressão linear da quantidade total produzida (2013 - 2019) {.tabset}
-***
-   
-```{r eval=TRUE, include=TRUE, echo = FALSE}
-models <- ddply( DF_GRAF_2 , .(PRODUTO), function(x) {
-   t <- lm(x, formula = VALORES ~ DATE)
-   data.frame("Intercepto" = coefficients(t)[1], 
-              Ano = coefficients(t)[2], 
-              "PVAL" = summary(t)$coef[2,4],
-              Significância = if_else(summary(t)$coef[2,4]<0.001,"0 ***",
-                                      if_else(0.001<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.01,"0.001 **",
-                                              if_else(0.01<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.05,"0.01 *",
-                                                      if_else(0.05<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.1,"0.1","1")))),
-              "Durbin Watson - 5%" = if_else(durbinWatsonTest( model = t)[["p"]] < 0.05, "Resíduos possuem correlação", "Resíduos sem correlação")
-   )
-})
-
-models_1 <- DF_GRAF_2 |>
-   group_by(PRODUTO) |>
-   dplyr::summarise(
-      MÉDIA = mean(VALORES, na.rm = T),
-      DESV.PAD = sd(VALORES, na.rm = T),
-      Q5 = quantile(VALORES, 0.05, na.rm = T),
-      Q95 = quantile(VALORES, 0.95, na.rm = T),
-      "LAG" = kpss.test(VALORES, null="Level")[2][[1]],
-      "KPSS - 5%" = if_else(kpss.test(VALORES, null="Level")[3][[1]] < 0.05, "Apresenta tendência", "Sem tendência")
-   )
-
-DESC <- left_join(models_1, models, by="PRODUTO")
-
-DESC <- DESC |>
-   mutate("Histograma"="", .after="Q95")
-
-colNam <- colnames(DESC)
-
-colNam <- c(colNam[1:12],"Durbin Watson - 5%")
-
-colnames(DESC) <- colNam
-
-DESC <- DESC |>
-   mutate(MÉDIA = round(MÉDIA, 3),
-          DESV.PAD = round(DESV.PAD, 3),
-          Q5 = round(Q5, 3),
-          Q95 = round(Q95, 3),
-          Intercepto = round(Intercepto, 3),
-          Ano = round(Ano, 6),
-          PVAL = round(PVAL, 5))
-
-kbl(DESC,table.attr = "style = \"color: black;\"", position = "c") |>
-   kable_styling(font_size = 16, position = "c", full_width = TRUE) |>
-   add_header_above(c(" ", "Descritivas" = 5, "Teste KPSS" = 2, "Modelo linear" = 5)) |>
-   column_spec(6, image = spec_hist(split(DF_GRAF_2$VALORES,DF_GRAF_2$PRODUTO),same_lim = FALSE))
-```
-
-<br>
-
-***
-
-<br>
-<br>
-
-### Produtividade {.tabset}
-***
-
-#### Gráficos {.tabset}
-
-##### Toda série {.tabset}
-
-###### Série histórica da produtividade
+### Gráfico - Série histórica da produtividade
 ***
    
 ```{r echo=FALSE, fig.width=11,fig.height=7}
@@ -953,90 +416,23 @@ ggplotly(SH_PLT)
 ```
 
 
-##### Série dividida {.tabset}
-
-```{r echo=FALSE, fig.width=11,fig.height=7}
-
-DF_GRAF_1<-BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM |>
-   filter(VARIAVEIS%in%VARS[9]&ANO>=2007&ANO<=2013&
-             !is.na(VALORES)&PRODUTO !="Carcaça suíno"&PRODUTO !="Carcaça bovino"&PRODUTO !="Carcaça frango") |>
-   mutate(DATE=as_date(paste(ANO,"1","1",sep = "-")))
-
-DF_GRAF_2<-BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM |>
-   filter(VARIAVEIS%in%VARS[9]&
-             ANO>=2013&ANO<=2019&
-             !is.na(VALORES)&PRODUTO !="Carcaça suíno"&PRODUTO !="Carcaça bovino"&PRODUTO !="Carcaça frango") |>
-   mutate(DATE=as_date(paste(ANO,"1","1",sep = "-")))
-
-breaks <- seq(0, max(DF_GRAF$VALORES,na.rm=T), by=10)
-
-# PLOT 1 ----
-SH_PLT_1<-ggplot(DF_GRAF_1, aes(x=DATE, y=VALORES, group=PRODUTO, color=PRODUTO)) +
-   geom_line()+
-   scale_x_date(date_labels="%Y",date_breaks  ="1 year")+
-   scale_y_continuous(breaks = breaks )+
-   theme_bw()+
-   ylab("Toneladas/ha")+
-   xlab("Ano")+
-   guides(fill=guide_legend(title=NULL))+
-   theme(legend.position="bottom",text = element_text(size = 13, face = "bold"),
-         legend.title = element_blank(),
-         axis.title.x = element_text(size = 15),
-         axis.title.y = element_text(size = 20),
-         axis.text.x = element_text(size = 10,angle = 35))
-# PLOT 1 ----
-SH_PLT_2<-ggplot(DF_GRAF_2, aes(x=DATE, y=VALORES, group=PRODUTO, color=PRODUTO)) +
-   geom_line()+
-   scale_x_date(date_labels="%Y",date_breaks  ="1 year")+
-   scale_y_continuous(breaks = breaks )+
-   theme_bw()+
-   ylab("Toneladas/ha")+
-   xlab("Ano")+
-   guides(fill=guide_legend(title=NULL))+
-   theme(legend.position="bottom",text = element_text(size = 13, face = "bold"),
-         legend.title = element_blank(),
-         axis.title.x = element_text(size = 15),
-         axis.title.y = element_text(size = 20),
-         axis.text.x = element_text(size = 10,angle = 35))
-
-```
-
-###### Série histórica da produtividade (2007 - 2013) {.tabset}
-***
-   
-```{r echo=FALSE, fig.width=11,fig.height=7}
-ggplotly(SH_PLT_1)
-```
-
-
-###### Série histórica da produtividade (2013 - 2019) {.tabset}
-***
-   
-```{r echo=FALSE, fig.width=11,fig.height=7}
-ggplotly(SH_PLT_2)
-```
-
-
-#### Tabelas {.tabset}
-
-##### Toda série {.tabset}
-
-###### Estatísticas descritivas e Modelos de regressão linear da produtividade
+### Tabelas - Estatísticas descritivas e Modelos de regressão linear da produtividade
 ***
    
 ```{r eval=TRUE, include=TRUE, echo = FALSE}
 models <- ddply( DF_GRAF , .(PRODUTO), function(x) {
-   t <- lm(x, formula = VALORES ~ DATE)
+   t <- lm(x, formula = VALORES ~ ANO)
    data.frame("Intercepto" = coefficients(t)[1], 
               Ano = coefficients(t)[2], 
               "PVAL" = summary(t)$coef[2,4],
               Significância = if_else(summary(t)$coef[2,4]<0.001,"0 ***",
-                                      if_else(0.001<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.01,"0.001 **",
-                                              if_else(0.01<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.05,"0.01 *",
-                                                      if_else(0.05<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.1,"0.1","1")))),
-              "Durbin Watson - 5%" = if_else(durbinWatsonTest( model = t)[["p"]] < 0.05, "Resíduos possuem correlação", "Resíduos sem correlação")
+                                     if_else(0.001<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.01,"0.001 **",
+                                             if_else(0.01<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.05,"0.01 *",
+                                                     if_else(0.05<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.1,"0.1","1")))),
+              "Durbin Watson" = durbinWatsonTest( model = t)[["dw"]],
+              "Durbin Watson - 5%" = if_else(durbinWatsonTest( model = t)[["p"]] < 0.05, "Com correlação", "Sem correlação")
    )
-})
+   })
 
 models_1 <- DF_GRAF |>
    group_by(PRODUTO) |>
@@ -1045,8 +441,8 @@ models_1 <- DF_GRAF |>
       DESV.PAD = sd(VALORES, na.rm = T),
       Q5 = quantile(VALORES, 0.05, na.rm = T),
       Q95 = quantile(VALORES, 0.95, na.rm = T),
-      "LAG" = kpss.test(VALORES, null="Level")[2][[1]],
-      "KPSS - 5%" = if_else(kpss.test(VALORES, null="Level")[3][[1]] < 0.05, "Apresenta tendência", "Sem tendência")
+      "KPSS" = kpss.test(VALORES, null="Level")[1][[1]],
+      "KPSS - 5%" = if_else(kpss.test(VALORES, null="Level")[3][[1]] < 0.05, "Com tendência", "Sem tendência")
    )
 
 DESC <- left_join(models_1, models, by="PRODUTO")
@@ -1056,7 +452,7 @@ DESC <- DESC |>
 
 colNam <- colnames(DESC)
 
-colNam <- c(colNam[1:12],"Durbin Watson - 5%")
+colNam <- c(colNam[1:12],"Durbin Watson", "Durbin Watson - 5%")
 
 colnames(DESC) <- colNam
 
@@ -1066,140 +462,42 @@ DESC <- DESC |>
           Q5 = round(Q5, 3),
           Q95 = round(Q95, 3),
           Intercepto = round(Intercepto, 3),
-          Ano = round(Ano, 6),
-          PVAL = round(PVAL, 5))
+          Ano = round(Ano, 5),
+          PVAL = round(PVAL, 5),
+          KPSS = round(KPSS, 3),
+          `Durbin Watson` = round(`Durbin Watson`, 3))
 
-kbl(DESC,table.attr = "style = \"color: black;\"", position = "c") |>
-   kable_styling(font_size = 16, position = "c", full_width = TRUE) |>
-   add_header_above(c(" ", "Descritivas" = 5, "Teste KPSS" = 2, "Modelo linear" = 5)) |>
-   column_spec(6, image = spec_hist(split(DF_GRAF$VALORES,DF_GRAF$PRODUTO),same_lim = FALSE))
+# Tabela resumida ----
+
+descTab <- DESC |>
+   select(PRODUTO, Ano, PVAL, Significância, "Durbin Watson", "Durbin Watson - 5%", "KPSS", "KPSS - 5%")
+
+colnames(descTab) <- c("Produto", "Ano", "P-Value", "Significância", "Durbin Watson", "Durbin Watson - 5%", "KPSS", "KPSS - 5%")
+
+kbl(descTab,table.attr = "style = \"color: black;\"", position = "c") |>
+  kable_styling(font_size = 16, position = "c", full_width = TRUE) |>
+   add_header_above(c("Resumo das análises" = 8)) |>
+   footnote(general = "Na análise de KPSS e Durbin Watson foram utilizadas variáveis LAG de dois período.")
+
+# Tabela descritiva ----
+descTab <- DESC |>
+   select(PRODUTO, MÉDIA, DESV.PAD, Q5, Q95, Histograma)|>
+   mutate("Box plot" = " ")
+
+colnames(descTab) <- c("Produto", "Média", "Desvio padrão", "Quantil - 5%", "Quantil - 95%", "Histograma", "Boxplot")
+
+kbl(descTab,table.attr = "style = \"color: black;\"", position = "c") |>
+  kable_styling(font_size = 16, position = "c", full_width = TRUE) |>
+   add_header_above(c("Estatísticas descritivas" = 7)) |>
+   column_spec(6, image = spec_hist(split(DF_GRAF$VALORES,DF_GRAF$PRODUTO),same_lim = FALSE)) |>
+   column_spec(7, image = spec_boxplot(split(DF_GRAF$VALORES,DF_GRAF$PRODUTO),same_lim = FALSE))
+
 ```
 
-##### Série dividida {.tabset}
 
-###### Estatísticas descritivas e Modelos de regressão linear da produtividade (2007 - 2013) {.tabset}
-***
-   
-```{r eval=TRUE, include=TRUE, echo = FALSE}
-models <- ddply( DF_GRAF_1 , .(PRODUTO), function(x) {
-   t <- lm(x, formula = VALORES ~ DATE)
-   data.frame("Intercepto" = coefficients(t)[1], 
-              Ano = coefficients(t)[2], 
-              "PVAL" = summary(t)$coef[2,4],
-              Significância = if_else(summary(t)$coef[2,4]<0.001,"0 ***",
-                                      if_else(0.001<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.01,"0.001 **",
-                                              if_else(0.01<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.05,"0.01 *",
-                                                      if_else(0.05<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.1,"0.1","1")))),
-              "Durbin Watson - 5%" = if_else(durbinWatsonTest( model = t)[["p"]] < 0.05, "Resíduos possuem correlação", "Resíduos sem correlação")
-   )
-})
+## Área destinada ao cultivo {.tabset}
 
-models_1 <- DF_GRAF_1 |>
-   group_by(PRODUTO) |>
-   dplyr::summarise(
-      MÉDIA = mean(VALORES, na.rm = T),
-      DESV.PAD = sd(VALORES, na.rm = T),
-      Q5 = quantile(VALORES, 0.05, na.rm = T),
-      Q95 = quantile(VALORES, 0.95, na.rm = T),
-      "LAG" = kpss.test(VALORES, null="Level")[2][[1]],
-      "KPSS - 5%" = if_else(kpss.test(VALORES, null="Level")[3][[1]] < 0.05, "Apresenta tendência", "Sem tendência")
-   )
-
-DESC <- left_join(models_1, models, by="PRODUTO")
-
-DESC <- DESC |>
-   mutate("Histograma"="", .after="Q95")
-
-colNam <- colnames(DESC)
-
-colNam <- c(colNam[1:12],"Durbin Watson - 5%")
-
-colnames(DESC) <- colNam
-
-DESC <- DESC |>
-   mutate(MÉDIA = round(MÉDIA, 3),
-          DESV.PAD = round(DESV.PAD, 3),
-          Q5 = round(Q5, 3),
-          Q95 = round(Q95, 3),
-          Intercepto = round(Intercepto, 3),
-          Ano = round(Ano, 6),
-          PVAL = round(PVAL, 5))
-
-kbl(DESC,table.attr = "style = \"color: black;\"", position = "c") |>
-   kable_styling(font_size = 16, position = "c", full_width = TRUE) |>
-   add_header_above(c(" ", "Descritivas" = 5, "Teste KPSS" = 2, "Modelo linear" = 5)) |>
-   column_spec(6, image = spec_hist(split(DF_GRAF_1$VALORES,DF_GRAF_1$PRODUTO),same_lim = FALSE))
-```
-
-###### Estatísticas descritivas e Modelos de regressão linear da produtividade (2013 - 2019) {.tabset}
-***
-   
-```{r eval=TRUE, include=TRUE, echo = FALSE}
-models <- ddply( DF_GRAF_2 , .(PRODUTO), function(x) {
-   t <- lm(x, formula = VALORES ~ DATE)
-   data.frame("Intercepto" = coefficients(t)[1], 
-              Ano = coefficients(t)[2], 
-              "PVAL" = summary(t)$coef[2,4],
-              Significância = if_else(summary(t)$coef[2,4]<0.001,"0 ***",
-                                      if_else(0.001<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.01,"0.001 **",
-                                              if_else(0.01<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.05,"0.01 *",
-                                                      if_else(0.05<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.1,"0.1","1")))),
-              "Durbin Watson - 5%" = if_else(durbinWatsonTest( model = t)[["p"]] < 0.05, "Resíduos possuem correlação", "Resíduos sem correlação")
-   )
-})
-
-models_1 <- DF_GRAF_2 |>
-   group_by(PRODUTO) |>
-   dplyr::summarise(
-      MÉDIA = mean(VALORES, na.rm = T),
-      DESV.PAD = sd(VALORES, na.rm = T),
-      Q5 = quantile(VALORES, 0.05, na.rm = T),
-      Q95 = quantile(VALORES, 0.95, na.rm = T),
-      "LAG" = kpss.test(VALORES, null="Level")[2][[1]],
-      "KPSS - 5%" = if_else(kpss.test(VALORES, null="Level")[3][[1]] < 0.05, "Apresenta tendência", "Sem tendência")
-   )
-
-DESC <- left_join(models_1, models, by="PRODUTO")
-
-DESC <- DESC |>
-   mutate("Histograma"="", .after="Q95")
-
-colNam <- colnames(DESC)
-
-colNam <- c(colNam[1:12],"Durbin Watson - 5%")
-
-colnames(DESC) <- colNam
-
-DESC <- DESC |>
-   mutate(MÉDIA = round(MÉDIA, 3),
-          DESV.PAD = round(DESV.PAD, 3),
-          Q5 = round(Q5, 3),
-          Q95 = round(Q95, 3),
-          Intercepto = round(Intercepto, 3),
-          Ano = round(Ano, 6),
-          PVAL = round(PVAL, 5))
-
-kbl(DESC,table.attr = "style = \"color: black;\"", position = "c") |>
-   kable_styling(font_size = 16, position = "c", full_width = TRUE) |>
-   add_header_above(c(" ", "Descritivas" = 5, "Teste KPSS" = 2, "Modelo linear" = 5)) |>
-   column_spec(6, image = spec_hist(split(DF_GRAF_2$VALORES,DF_GRAF_2$PRODUTO),same_lim = FALSE))
-```
-
-<br>
-
-***
-
-<br>
-<br>
-
-### Área destinada ao cultivo {.tabset}
-***
-
-#### Gráficos {.tabset}
-
-##### Toda série {.tabset}
-
-###### Série histórica da área destinada ao cultivo
+### Gráfico - Série histórica da área destinada ao cultivo
 ***
    
 ```{r echo=FALSE, fig.width=11,fig.height=7}
@@ -1229,88 +527,23 @@ ggplotly(SH_PLT)
 ```
 
 
-##### Série dividida {.tabset}
-
-```{r echo=FALSE, fig.width=11,fig.height=7}
-
-DF_GRAF_1<-BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM |>
-   filter(VARIAVEIS%in%VARS[8]&ANO>=2007&ANO<=2013&
-             !is.na(VALORES)&PRODUTO !="Carcaça suíno"&PRODUTO !="Carcaça bovino"&PRODUTO !="Carcaça frango"&PRODUTO !="Ovos de galinha"&PRODUTO !="Leite") |>
-   mutate(DATE=as_date(paste(ANO,"1","1",sep = "-")))
-
-DF_GRAF_2<-BD_COMP_PAP_PTD_ST_DEFLA_ANA_L_IPCA_IGPM |>
-   filter(VARIAVEIS%in%VARS[8]&
-             ANO>=2013&ANO<=2019&
-             !is.na(VALORES)&PRODUTO !="Carcaça suíno"&PRODUTO !="Carcaça bovino"&PRODUTO !="Carcaça frango"&PRODUTO !="Ovos de galinha"&PRODUTO !="Leite") |>
-   mutate(DATE=as_date(paste(ANO,"1","1",sep = "-")))
-
-# PLOT 1 ----
-SH_PLT_1<-ggplot(DF_GRAF_1, aes(x=DATE, y=VALORES, group=PRODUTO, color=PRODUTO))+
-   geom_line()+
-   scale_x_date(date_labels="%Y",date_breaks  ="1 year")+
-   scale_y_continuous(breaks = breaks )+
-   theme_bw()+
-   ylab("Milhões de hectares")+
-   xlab("Ano")+
-   guides(fill=guide_legend(title=NULL))+
-   theme(legend.position="bottom",text = element_text(size = 13, face = "bold"),
-         legend.title = element_blank(),
-         axis.title.x = element_text(size = 15),
-         axis.title.y = element_text(size = 20),
-         axis.text.x = element_text(size = 10,angle = 35))
-# PLOT 1 ----
-SH_PLT_2<-ggplot(DF_GRAF_2, aes(x=DATE, y=VALORES, group=PRODUTO, color=PRODUTO))+
-   geom_line()+
-   scale_x_date(date_labels="%Y",date_breaks  ="1 year")+
-   scale_y_continuous(breaks = breaks )+
-   theme_bw()+
-   ylab("Milhões de hectares")+
-   xlab("Ano")+
-   guides(fill=guide_legend(title=NULL))+
-   theme(legend.position="bottom",text = element_text(size = 13, face = "bold"),
-         legend.title = element_blank(),
-         axis.title.x = element_text(size = 15),
-         axis.title.y = element_text(size = 20),
-         axis.text.x = element_text(size = 10,angle = 35))
-
-```
-
-###### Série histórica da área destinada ao cultivo (2007 - 2013) {.tabset}
-***
-   
-```{r echo=FALSE, fig.width=11,fig.height=7}
-ggplotly(SH_PLT_1)
-```
-
-
-###### Série histórica da área destinada ao cultivo (2013 - 2019) {.tabset}
-***
-   
-```{r echo=FALSE, fig.width=11,fig.height=7}
-ggplotly(SH_PLT_2)
-```
-
-
-#### Tabelas {.tabset}
-
-##### Toda série {.tabset}
-
-###### Estatísticas descritivas e Modelos de regressão linear da área destinada ao cultivo
+### Tabelas - Estatísticas descritivas e Modelos de regressão linear da área destinada ao cultivo
 ***
    
 ```{r eval=TRUE, include=TRUE, echo = FALSE}
 models <- ddply( DF_GRAF , .(PRODUTO), function(x) {
-   t <- lm(x, formula = VALORES ~ DATE)
+   t <- lm(x, formula = VALORES ~ ANO)
    data.frame("Intercepto" = coefficients(t)[1], 
               Ano = coefficients(t)[2], 
               "PVAL" = summary(t)$coef[2,4],
               Significância = if_else(summary(t)$coef[2,4]<0.001,"0 ***",
-                                      if_else(0.001<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.01,"0.001 **",
-                                              if_else(0.01<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.05,"0.01 *",
-                                                      if_else(0.05<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.1,"0.1","1")))),
-              "Durbin Watson - 5%" = if_else(durbinWatsonTest( model = t)[["p"]] < 0.05, "Resíduos possuem correlação", "Resíduos sem correlação")
+                                     if_else(0.001<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.01,"0.001 **",
+                                             if_else(0.01<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.05,"0.01 *",
+                                                     if_else(0.05<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.1,"0.1","1")))),
+              "Durbin Watson" = durbinWatsonTest( model = t)[["dw"]],
+              "Durbin Watson - 5%" = if_else(durbinWatsonTest( model = t)[["p"]] < 0.05, "Com correlação", "Sem correlação")
    )
-})
+   })
 
 models_1 <- DF_GRAF |>
    group_by(PRODUTO) |>
@@ -1319,8 +552,8 @@ models_1 <- DF_GRAF |>
       DESV.PAD = sd(VALORES, na.rm = T),
       Q5 = quantile(VALORES, 0.05, na.rm = T),
       Q95 = quantile(VALORES, 0.95, na.rm = T),
-      "LAG" = kpss.test(VALORES, null="Level")[2][[1]],
-      "KPSS - 5%" = if_else(kpss.test(VALORES, null="Level")[3][[1]] < 0.05, "Apresenta tendência", "Sem tendência")
+      "KPSS" = kpss.test(VALORES, null="Level")[1][[1]],
+      "KPSS - 5%" = if_else(kpss.test(VALORES, null="Level")[3][[1]] < 0.05, "Com tendência", "Sem tendência")
    )
 
 DESC <- left_join(models_1, models, by="PRODUTO")
@@ -1330,7 +563,7 @@ DESC <- DESC |>
 
 colNam <- colnames(DESC)
 
-colNam <- c(colNam[1:12],"Durbin Watson - 5%")
+colNam <- c(colNam[1:12],"Durbin Watson", "Durbin Watson - 5%")
 
 colnames(DESC) <- colNam
 
@@ -1340,128 +573,34 @@ DESC <- DESC |>
           Q5 = round(Q5, 3),
           Q95 = round(Q95, 3),
           Intercepto = round(Intercepto, 3),
-          Ano = round(Ano, 6),
-          PVAL = round(PVAL, 5))
+          Ano = round(Ano, 5),
+          PVAL = round(PVAL, 5),
+          KPSS = round(KPSS, 3),
+          `Durbin Watson` = round(`Durbin Watson`, 3))
 
-kbl(DESC,table.attr = "style = \"color: black;\"", position = "c") |>
-   kable_styling(font_size = 16, position = "c", full_width = TRUE) |>
-   add_header_above(c(" ", "Descritivas" = 5, "Teste KPSS" = 2, "Modelo linear" = 5)) |>
-   column_spec(6, image = spec_hist(split(DF_GRAF$VALORES,DF_GRAF$PRODUTO),same_lim = FALSE))
+# Tabela resumida ----
+
+descTab <- DESC |>
+   select(PRODUTO, Ano, PVAL, Significância, "Durbin Watson", "Durbin Watson - 5%", "KPSS", "KPSS - 5%")
+
+colnames(descTab) <- c("Produto", "Ano", "P-Value", "Significância", "Durbin Watson", "Durbin Watson - 5%", "KPSS", "KPSS - 5%")
+
+kbl(descTab,table.attr = "style = \"color: black;\"", position = "c") |>
+  kable_styling(font_size = 16, position = "c", full_width = TRUE) |>
+   add_header_above(c("Resumo das análises" = 8)) |>
+   footnote(general = "Na análise de KPSS e Durbin Watson foram utilizadas variáveis LAG de dois período.")
+
+# Tabela descritiva ----
+descTab <- DESC |>
+   select(PRODUTO, MÉDIA, DESV.PAD, Q5, Q95, Histograma)|>
+   mutate("Box plot" = " ")
+
+colnames(descTab) <- c("Produto", "Média", "Desvio padrão", "Quantil - 5%", "Quantil - 95%", "Histograma", "Boxplot")
+
+kbl(descTab,table.attr = "style = \"color: black;\"", position = "c") |>
+  kable_styling(font_size = 16, position = "c", full_width = TRUE) |>
+   add_header_above(c("Estatísticas descritivas" = 7)) |>
+   column_spec(6, image = spec_hist(split(DF_GRAF$VALORES,DF_GRAF$PRODUTO),same_lim = FALSE)) |>
+   column_spec(7, image = spec_boxplot(split(DF_GRAF$VALORES,DF_GRAF$PRODUTO),same_lim = FALSE))
+
 ```
-
-##### Série dividida {.tabset}
-
-###### Estatísticas descritivas e Modelos de regressão linear da área destinada ao cultivo (2007 - 2013) {.tabset}
-***
-   
-```{r eval=TRUE, include=TRUE, echo = FALSE}
-models <- ddply( DF_GRAF_1 , .(PRODUTO), function(x) {
-   t <- lm(x, formula = VALORES ~ DATE)
-   data.frame("Intercepto" = coefficients(t)[1], 
-              Ano = coefficients(t)[2], 
-              "PVAL" = summary(t)$coef[2,4],
-              Significância = if_else(summary(t)$coef[2,4]<0.001,"0 ***",
-                                      if_else(0.001<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.01,"0.001 **",
-                                              if_else(0.01<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.05,"0.01 *",
-                                                      if_else(0.05<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.1,"0.1","1")))),
-              "Durbin Watson - 5%" = if_else(durbinWatsonTest( model = t)[["p"]] < 0.05, "Resíduos possuem correlação", "Resíduos sem correlação")
-   )
-})
-
-models_1 <- DF_GRAF_1 |>
-   group_by(PRODUTO) |>
-   dplyr::summarise(
-      MÉDIA = mean(VALORES, na.rm = T),
-      DESV.PAD = sd(VALORES, na.rm = T),
-      Q5 = quantile(VALORES, 0.05, na.rm = T),
-      Q95 = quantile(VALORES, 0.95, na.rm = T),
-      "LAG" = kpss.test(VALORES, null="Level")[2][[1]],
-      "KPSS - 5%" = if_else(kpss.test(VALORES, null="Level")[3][[1]] < 0.05, "Apresenta tendência", "Sem tendência")
-   )
-
-DESC <- left_join(models_1, models, by="PRODUTO")
-
-DESC <- DESC |>
-   mutate("Histograma"="", .after="Q95")
-
-colNam <- colnames(DESC)
-
-colNam <- c(colNam[1:12],"Durbin Watson - 5%")
-
-colnames(DESC) <- colNam
-
-DESC <- DESC |>
-   mutate(MÉDIA = round(MÉDIA, 3),
-          DESV.PAD = round(DESV.PAD, 3),
-          Q5 = round(Q5, 3),
-          Q95 = round(Q95, 3),
-          Intercepto = round(Intercepto, 3),
-          Ano = round(Ano, 6),
-          PVAL = round(PVAL, 5))
-
-kbl(DESC,table.attr = "style = \"color: black;\"", position = "c") |>
-   kable_styling(font_size = 16, position = "c", full_width = TRUE) |>
-   add_header_above(c(" ", "Descritivas" = 5, "Teste KPSS" = 2, "Modelo linear" = 5)) |>
-   column_spec(6, image = spec_hist(split(DF_GRAF_1$VALORES,DF_GRAF_1$PRODUTO),same_lim = FALSE))
-```
-
-###### Estatísticas descritivas e Modelos de regressão linear da área destinada ao cultivo (2013 - 2019) {.tabset}
-***
-   
-```{r eval=TRUE, include=TRUE, echo = FALSE}
-models <- ddply( DF_GRAF_2 , .(PRODUTO), function(x) {
-   t <- lm(x, formula = VALORES ~ DATE)
-   data.frame("Intercepto" = coefficients(t)[1], 
-              Ano = coefficients(t)[2], 
-              "PVAL" = summary(t)$coef[2,4],
-              Significância = if_else(summary(t)$coef[2,4]<0.001,"0 ***",
-                                      if_else(0.001<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.01,"0.001 **",
-                                              if_else(0.01<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.05,"0.01 *",
-                                                      if_else(0.05<=summary(t)$coef[2,4]&summary(t)$coef[2,4]<0.1,"0.1","1")))),
-              "Durbin Watson - 5%" = if_else(durbinWatsonTest( model = t)[["p"]] < 0.05, "Resíduos possuem correlação", "Resíduos sem correlação")
-   )
-})
-
-models_1 <- DF_GRAF_2 |>
-   group_by(PRODUTO) |>
-   dplyr::summarise(
-      MÉDIA = mean(VALORES, na.rm = T),
-      DESV.PAD = sd(VALORES, na.rm = T),
-      Q5 = quantile(VALORES, 0.05, na.rm = T),
-      Q95 = quantile(VALORES, 0.95, na.rm = T),
-      "LAG" = kpss.test(VALORES, null="Level")[2][[1]],
-      "KPSS - 5%" = if_else(kpss.test(VALORES, null="Level")[3][[1]] < 0.05, "Apresenta tendência", "Sem tendência")
-   )
-
-DESC <- left_join(models_1, models, by="PRODUTO")
-
-DESC <- DESC |>
-   mutate("Histograma"="", .after="Q95")
-
-colNam <- colnames(DESC)
-
-colNam <- c(colNam[1:12],"Durbin Watson - 5%")
-
-colnames(DESC) <- colNam
-
-DESC <- DESC |>
-   mutate(MÉDIA = round(MÉDIA, 3),
-          DESV.PAD = round(DESV.PAD, 3),
-          Q5 = round(Q5, 3),
-          Q95 = round(Q95, 3),
-          Intercepto = round(Intercepto, 3),
-          Ano = round(Ano, 6),
-          PVAL = round(PVAL, 5))
-
-kbl(DESC,table.attr = "style = \"color: black;\"", position = "c") |>
-   kable_styling(font_size = 16, position = "c", full_width = TRUE) |>
-   add_header_above(c(" ", "Descritivas" = 5, "Teste KPSS" = 2, "Modelo linear" = 5)) |>
-   column_spec(6, image = spec_hist(split(DF_GRAF_2$VALORES,DF_GRAF_2$PRODUTO),same_lim = FALSE))
-```
-
-<br>
-
-***
-
-<br>
-<br>
