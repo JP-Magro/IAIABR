@@ -1,0 +1,13 @@
+/* Programa de leitura do arquivo ALTURA_PESO_REF */
+
+data ALTURA_PESO_REFERIDOS;
+INFILE ".....ALTURA_PESO_REF.txt";
+INPUT
+@01  UF                      2.    /* Código da Unidade da Federação */
+@03  CONTROL                 6.    /* Número do Controle (UF + Sequencial + DV) */
+@09  DOMCL                   2.    /* Número do Domicílio */
+@11  UC                      1.    /* Número da Unidade de Consumo */
+@12  INFO                    2.    /* Número do Informante */
+@14  ALTURA_REFERIDA         3     /* Altura Referida */
+@17  PESO_REFERIDO           5.1;  /* Peso Referido */
+run;

@@ -1,0 +1,133 @@
+---
+title: "Dicionário unificado de produtos alimentícios - POFs 2008 - 2009 e 2017 - 2018"
+author: "João Pedro Magro"
+date: "Última atualização no dia `r format(Sys.time(), '%d de %B de %Y')` ás `r format(Sys.time(), '%H:%M')`"
+output: 
+   html_document:
+   number_sections: true
+   toc: true
+---
+
+```{r SETUP, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE
+                      ,results = 'show'
+                      ,error=FALSE
+                      ,warning=FALSE
+                      ,message=FALSE)
+```
+
+<br>
+<br>
+
+# Introdução {-}
+
+<br>
+
+Esse relatório é a rotina de criação de um dicionário unificado dos produtos alimentícios utilizados nas POF de 2008-2009 e 2017-2018.
+
+<br>
+<br>
+
+# Bibliotecas {-}
+
+<br>
+
+```{r BIBLIOTECAS, echo=TRUE}
+library(tidyverse)
+library(readr)
+library(readxl)
+```
+
+<br>
+<br>
+
+# Leitura dos dados
+
+<br>
+
+```{r Leitura de dados, echo=TRUE}
+#Cadastro de produtos alimentícios da POF 2008 e 2009
+CadConsAlim0809 <- read_excel("POF/DocumentosIbge/Dicionarios/0809/Cadastro de Produtos do Consumo Alimentar POF 2008-2009.xls", 
+    col_types = c("text", "text", "text"))
+
+#Cadastro de produtos alimentícios da POF 2017 e 2018
+CadConsAlim1718 <- read_excel("POF/DocumentosIbge/Dicionarios/1718/Cadastro de Produtos do Consumo Alimentar.xls", 
+    col_types = c("text", "text"))
+```
+
+<br>
+<br>
+
+# Indexação de POF referência
+
+<br>
+
+```{r Indexação versão, echo=TRUE}
+#Indexação do dicionário POF 2008 - 2009
+CadConsAlim0809 <- CadConsAlim0809|>
+   select(CÓDIGO, DESCRICAO)|>
+   mutate(VerPof = "POF0809")
+
+#Indexação do dicionário POF 2017 - 2018
+CadConsAlim1718 <- CadConsAlim1718|>
+   select(`CÓDIGO DO ALIMENTO`, `DESCRIÇÃO DO ALIMENTO`)|>
+   mutate(VerPof = "POF1718")
+
+#Criando nome de variáveis
+VarNames <- c("codigo", "DescProd", "VerPof")
+
+#Renomeando as variáveis nos dois dicionários
+colnames(CadConsAlim0809) <- VarNames
+
+colnames(CadConsAlim1718) <- VarNames
+
+```
+
+<br>
+<br>
+
+# Junção dos dataframes 
+
+<br>
+
+```{r Junção dos datraframes, echo=TRUE}
+#Junção dos dataframes
+CadConsAlim0818 <- bind_rows(CadConsAlim0809,CadConsAlim1718)
+```
+
+<br>
+<br>
+
+# Filtragem dos dados para observações únicas
+
+<br>
+
+```{r Filtragem de observacoes, echo=TRUE}
+#Filtragem para observações únicas
+CadConsAlim0818 <- CadConsAlim0818|>
+   distinct(codigo,DescProd, .keep_all = TRUE)
+```
+
+<br>
+
+# Salvando o arquivo gerado
+
+```{r Salvamento do arquivo, echo=TRUE}
+#Ajustando diretório para slvar
+setwd("~/GitHub/IAIABr/POF/DocumentosIbge/Dicionarios")
+
+#Salvando como .rds
+saveRDS(CadConsAlim0818, file = paste("CadConsAlim0818",format(Sys.time(), '%d_%m_%Y'),".rds",sep=""))
+
+#Salvando como .csv
+
+write.csv(CadConsAlim0818,file = paste("CadConsAlim0818",format(Sys.time(), '%d_%m_%Y'),".csv",sep=""))
+
+```
+
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
