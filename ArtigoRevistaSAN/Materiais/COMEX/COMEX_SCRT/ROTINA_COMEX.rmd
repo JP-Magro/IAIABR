@@ -1,0 +1,854 @@
+---
+title: "Comércio exterior"
+author: "Gustavo Jun Yakushiji e João Pedro Magro"
+date: "Última atualização no dia `r format(Sys.time(), '%d de %B de %Y')`"
+output:
+  html_document:
+    theme: paper
+    highlight: pygments
+    toc: TRUE
+    toc_float: TRUE
+    toc_depth: 4
+    number_sections: TRUE
+bibliography: REFS_COMEX.bib
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE
+                      ,results = 'show'
+                      ,error=FALSE
+                      ,warning=FALSE
+                      ,message=FALSE
+                      , eval = FALSE)
+options(scipen=999)
+```
+
+
+<br>
+<br>
+
+
+# Bibliotecas utilizadas {-}
+***
+
+<br>
+
+```{r BIBLIOTECAS, echo=TRUE , eval=TRUE}
+#'*Coleta e manipulação de dados*
+
+library(ComexstatR)
+library(tidyverse)
+library(readxl)
+library(writexl)
+library(openxlsx)
+
+#'*Bibliografia*
+
+library(kableExtra)
+library(knitr)
+write_bib(c("ComexstatR","tidyverse","readxl", "writexl","knitr","kableExtra", "openxlsx"),
+          file = "REFS_COMEX.bib")
+```
+
+<br>
+<br>
+
+# Introdução {-}
+***
+
+<br>
+
+## Tabela 1 - Referência, descrição, variáveis coletadas e fonte das tabelas que compõem o banco de dados {-}
+
+```{r Tabela I, echo=FALSE, eval=TRUE}
+
+TAB_REC_ANUAIS<-tibble(
+   "Referência"=c(
+      "Exportação",
+      "Importação",
+      5457,
+      "Açúcar",
+      1092,
+      1093,
+      1094,
+      915,
+      1086,
+      793,
+      1286,
+      6579
+   ),
+   
+   "Descrição"=c(
+      "Base de dados detalhada por ano, código NCM, descrição NCM, valor dólar FOB (USS), quilograma líquido exportado e quantidade estatística.",
+      "Base de dados detalhada por ano, código NCM, descrição NCM, valor dólar FOB (USS), quilograma líquido importado e quantidade estatística.",
+      "Área plantada ou destinada à colheita, área colhida, quantidade produzida, rendimento médio e valor da produção das lavouras temporárias e permanentes.",
+      "Série histórica de produção de açúcar.",
+      "Número de informantes, Quantidade e Peso total das carcaças dos bovinos abatidos, no mês e no trimestre, por tipo de rebanho e tipo de inspeção.",
+      "Número de informantes, Quantidade e Peso total das carcaças dos suínos abatidos, no mês e no trimestre, por tipo de inspeção.",
+      "Número de informantes, Quantidade e Peso total das carcaças dos frangos abatidos, no mês e no trimestre, por tipo de inspeção.",
+      "Número de informantes, Número de galinhas poedeiras e Quantidade de ovos produzidos, no mês e no trimestre.",
+      "Número de informantes e Quantidade de leite cru, resfriado ou não, adquirido e industrializado, no mês e no trimestre, por tipo de inspeção.",
+      "Contagem da população - 2007",
+      "Censo demográfico - 2010",
+      "Estimativas de população"
+   ),
+   
+   "Variáveis coletadas"=c(
+      "Quantidade exportada, em kg líquido, de acordo com o ano e agrupamento NCM",
+      "Quantidade importada, em kg líquido, de acordo com o ano e agrupamento NCM",
+      "Quantidade produzida - Toneladas",
+      "Quantidade produzida - mil Toneladas",
+      "Peso total das carcaças - kg",
+      "Peso total das carcaças - kg",
+      "Peso total das carcaças - kg",
+      "Quantidade de ovos produzidos - Mil dúzias",
+      "Quantidade de leite cru, resfriado ou não, industrializado - Mil litros",
+      "População residente (Pessoas) de 2007",
+      "População (Pessoas) de 2010",
+      "População residente estimada (Pessoas) - 2008, 2009, 2011 a 2019"
+   ),
+   
+   "Fonte" = c(
+      "Comex Stat",
+      "Comex Stat",
+      "IBGE",
+      "CONAB",
+      "IBGE",
+      "IBGE",
+      "IBGE",
+      "IBGE",
+      "IBGE",
+      "IBGE",
+      "IBGE",
+      "IBGE"
+   )
+   
+)
+
+kbl(TAB_REC_ANUAIS,table.attr = "style = \"color: black;\"", position = "c")%>%
+   kable_styling(font_size = 16, position = "c", full_width = FALSE)
+
+```
+
+<br>
+<br>
+
+# Coleta e processamento de dados - Comex Stat
+***
+
+<br>
+
+## Método de coleta utilizado
+
+<br>
+
+O acesso aos dados do comércio exterior brasileiro se deu através do sistema [*Comex Stat*](http://comexstat.mdic.gov.br/pt/geral). Este portal apresenta os dados gerais de exportação e importação utilizados para construção da balança comercial brasileira. Para fins deste documento, foram coletadas as bases de dados de exportação e importação, ambas detalhadas por Nomenclatura Comum do Mercosul (NCM), entre os anos de 1997 e 2022.  
+
+<br>
+
+```{r Coleta2}
+#'*Coleta via Comex Stat*
+#'*Exportação*
+COMEX_EXP_97_22_V1 <- read_delim(
+   c("~/R program/_IAIABr-main/COMEX/COMEX_DADOS/COMEX_RAW/EXP_1997_2009_20220403.csv",
+     "~/R program/_IAIABr-main/COMEX/COMEX_DADOS/COMEX_RAW/EXP_2010_2022_20220403.csv"),
+   delim = ";",
+   escape_double = FALSE, trim_ws = TRUE)
+
+
+#'*Importação*
+COMEX_IMP_97_22_V1 <- read_delim(
+   c("~/R program/_IAIABr-main/COMEX/COMEX_DADOS/COMEX_RAW/IMP_1997_2009_20220403.csv",
+     "~/R program/_IAIABr-main/COMEX/COMEX_DADOS/COMEX_RAW/IMP_2010_2022_20220403.csv"),
+   delim = ";",
+   escape_double = FALSE, trim_ws = TRUE)
+```
+
+
+<br>
+
+## Juntando Exportação e Importação
+
+```{r}
+COMEX_EXP_97_22_V2 <- COMEX_EXP_97_22_V1 %>% 
+   mutate(TIPO_OP = "Exportação")
+
+COMEX_IMP_97_22_V2 <- COMEX_IMP_97_22_V1 %>% 
+   mutate(TIPO_OP = "Importação")
+
+COMEX_EXP_IMP_97_22 <- rbind(COMEX_EXP_97_22_V2, COMEX_IMP_97_22_V2)
+
+write_rds(COMEX_EXP_IMP_97_22, "~/R program/_IAIABr-main/COMEX/COMEX_DADOS/COMEX_RAW/COMEX_EXP_IMP_97_22.rds")
+
+rm(COMEX_EXP_97_22_V1, COMEX_IMP_97_22_V1, COMEX_EXP_97_22_V2, COMEX_IMP_97_22_V2)
+```
+
+<br>
+
+## Recuperação das tabelas
+
+<br>
+
+```{r}
+COMEX_EXP_IMP_97_22 <- read_rds("~/R program/_IAIABr-main/COMEX/COMEX_DADOS/COMEX_RAW/COMEX_EXP_IMP_97_22.rds")
+
+COMEX_97_22 <- COMEX_EXP_IMP_97_22 %>% 
+   arrange(Ano) %>% 
+   mutate(Ano = factor(Ano, levels = c(1997:2022)),
+          `Descrição NCM` = str_to_sentence(`Descrição NCM`)) %>% 
+   rename("ANO" = Ano,
+          "COD_NCM" = `Código NCM`,
+          "DESC_NCM" = `Descrição NCM`,
+          "VAL_DOLAR" = `Valor FOB (US$)`,
+          "KG_LIQ" = `Quilograma Líquido`,
+          "QTD_EST" = `Quantidade Estatística`) %>% 
+   select(7, 1:6)
+
+write_rds(COMEX_97_22, "~/R program/_IAIABr-main/COMEX/COMEX_DADOS/COMEX_RAW/COMEX_97_22.rds")
+
+rm(COMEX_EXP_IMP_97_22)
+
+```
+
+<br>
+<br>
+
+## Juntando com Indexadores
+
+<br>
+
+### Manipulação do Indexador Agrostat
+
+<br>
+
+O banco de dados do Comex Stat está classificado somente a nível de NCM. Para fins desse documento, será utilizado como referência de indexação a classificação adotada pelo sistema da **Agrostat**, cuja organização se dá a nível de `Categoria`, `Setor(es)`, `Subsetor`, `Produto` e, por fim, o nível de menor agregação, a Nomenclatura Comum do Mercosul (`DESC_NCM`). Sendo assim, será realizado o cruzamento entre o indexador da Agrostat com o do Comex Stat para gerar o indexador final a ser utilizado.  
+
+<br>
+
+```{r}
+# Carregando dicionário Agrostat
+DICIO_AGROSTAT <- read_excel("~/R program/_IAIABr-main/COMEX/COMEX_DADOS/COMEX_RAW/DICIO_AGROSTAT.xlsx")
+
+# Coletando descrições NCM do Comex Sttat para padronização de nomenclaturas
+DICIO_API <- ComexstatR::pesquisar_ncm() %>% 
+   rename("COD_NCM" = NCM,
+          "DESC_NCM" = Descrição)
+
+# Cruzamento dos dicionários acima para gerar o indexador final padronizado
+DICIO_AGROSTAT_COMP <- full_join(DICIO_AGROSTAT, DICIO_API, by = c("COD_NCM")) %>% 
+   filter(DESC_NCM.x != is.na(DESC_NCM.x)) %>% 
+   select(!DESC_NCM.x) %>% 
+   mutate("CATEG" = str_to_sentence(Categoria),
+          "SETOR" = str_to_sentence(`Setor(es)`),
+          "SUBSETOR" = str_to_sentence(Subsetor),
+          "PROD" = str_to_sentence(Produto),
+          "DESC_NCM" = str_to_sentence(`DESC_NCM.y`), .keep="unused") %>% 
+   select(CATEG:PROD, COD_NCM, DESC_NCM)
+
+write_rds(DICIO_AGROSTAT_COMP, "~/R program/_IAIABr-main/COMEX/COMEX_DADOS/INDICES/DICIO_AGROSTAT_COMP.rds")
+
+rm(DICIO_AGROSTAT, DICIO_API)
+```
+
+<br>
+
+### Indexando Exportação e Importação 
+
+<br>
+
+Uma vez obtido o indexador final, será realizado a indexação com os bancos de dados de exportação e importação.  
+
+```{r}
+# Carregando o dicionário
+DICIO_AGROSTAT_COMP <- read_rds("~/R program/_IAIABr-main/COMEX/COMEX_DADOS/INDICES/DICIO_AGROSTAT_COMP.rds")
+
+# Carregando o banco de dados COMEX
+COMEX_97_22 <- read_rds("~/R program/_IAIABr-main/COMEX/COMEX_DADOS/COMEX_RAW/COMEX_97_22.rds")
+
+# Indexação com Exportação e Importação
+COMEX_97_22_CORR <- full_join(COMEX_97_22, DICIO_AGROSTAT_COMP, by = c("COD_NCM")) %>% 
+   filter(DESC_NCM.y != is.na(DESC_NCM.y))
+
+   #' *Verificando indexação*
+   ## Geral:
+   TESTE <- data.frame(COD_VERIF = unique(COMEX_97_22_CORR$COD_NCM))
+   ### Verificou-se que nº de linhas do banco de dados é o mesmo que o do dicionário, quando fez unique após join e filter.
+   
+   ## Exportação:
+   TESTE_EXP <- COMEX_97_22_CORR %>%
+      filter(TIPO_OP == "Exportação") %>% 
+      summarise(COD_VERIF = unique(COD_NCM))
+   ### Verificou-se que na exportação, todos os NCMs do dicionário estão presentes no banco de dados de exportação
+   
+   ## Importação:
+    TESTE_IMP <- COMEX_97_22_CORR %>%
+      filter(TIPO_OP == "Importação") %>% 
+      summarise(COD_VERIF = unique(COD_NCM))  
+    ### Verificou-se que na importação, 224 NCMs do dicionário não estão presentes no banco de dados de importação
+
+
+rm(COMEX_97_22, TESTE, TESTE_EXP, TESTE_IMP, DICIO_AGROSTAT_COMP)
+```
+
+Após a indexação e a verificação, identificou-se que 224 classificações NCM não estão presentes no banco de dados de importação, quando comparado ao indexador do Comex Stat, o que indica que os dados de exportação possuem 224 descrições NCM a mais que os da importação.  
+
+<br>
+
+### Processamento pós-indexação - Exportação e Importação 
+
+<br>
+
+Uma vez indexado, serão realizados processamentos dos dados obtidos para padronização e organização.  
+
+```{r}
+COMEX_97_22_COMP <- COMEX_97_22_CORR %>% 
+   select(TIPO_OP, ANO, CATEG, SETOR, SUBSETOR, PROD, COD_NCM, DESC_NCM.y, VAL_DOLAR, KG_LIQ, QTD_EST) %>%
+   rename("DESC_NCM" = DESC_NCM.y) %>% 
+   arrange(TIPO_OP, ANO, CATEG, SETOR, SUBSETOR, PROD, DESC_NCM)
+
+
+write_rds(COMEX_97_22_COMP, "~/R program/_IAIABr-main/COMEX/COMEX_DADOS/COMEX_RAW/COMEX_97_22_COMP.rds")
+
+rm(COMEX_97_22_CORR)
+```
+
+<br>
+<br>
+
+## Selecionando produtos agropecuários
+
+<br>
+
+Para a finalidade do trabalho, serão selecionados os seguintes produtos agropecuários: açúcar, arroz, banana, batata, café, cebola, feijão, laranja, mandioca, milho, soja, tomate, trigo, leite, ovos de galinha, carcaça de frango, bovina e suína.  
+
+<br>
+
+```{r}
+# Carregando base de dados de Exportação e Importação
+COMEX_97_22_COMP <- read_rds("~/R program/_IAIABr-main/COMEX/COMEX_DADOS/COMEX_RAW/COMEX_97_22_COMP.rds")
+
+# Seleção dos produtos agropecuários
+## Açúcar
+zsucroalcool <- COMEX_97_22_COMP %>%
+   filter(ANO %in% 2007:2019,
+          CATEG == "Complexo sucroalcooleiro",
+          SUBSETOR %in% c("Açúcar de cana ou beterraba", "Demais açúcares")) %>%
+   select(!c(QTD_EST, VAL_DOLAR)) %>%
+   mutate(PA = "Açúcar")
+
+## Arroz
+zarroz <- COMEX_97_22_COMP %>%
+   filter(ANO %in% 2007:2019) %>%
+   select(!c(QTD_EST, VAL_DOLAR)) %>%
+   filter(str_detect(DESC_NCM, c("Arroz|arroz"))) %>%
+   mutate(PA = "Arroz")
+
+## Banana
+zbanana <- COMEX_97_22_COMP %>%
+   filter(ANO %in% 2007:2019) %>%
+   select(!c(QTD_EST, VAL_DOLAR)) %>%
+   filter(str_detect(DESC_NCM, c("Banana|banana|Bananas|bananas"))) %>%
+   mutate(PA = "Banana")
+
+## Batata
+zbatata <- COMEX_97_22_COMP %>%
+   filter(ANO %in% 2007:2019) %>%
+   select(!c(QTD_EST, VAL_DOLAR)) %>%
+   filter(str_detect(DESC_NCM, c("Batata|batata|Batatas|batatas"))) %>%
+   mutate(PA = "Batata")
+
+
+## Café
+zcafe <- COMEX_97_22_COMP %>%
+   filter(ANO %in% 2007:2019) %>%
+   select(!c(QTD_EST, VAL_DOLAR)) %>%
+   filter(str_detect(DESC_NCM, c("Cafe|cafe|Café|café"))) %>%
+   mutate(PA = "Café")
+
+## Cebola
+zcebola <- COMEX_97_22_COMP %>%
+   filter(ANO %in% 2007:2019) %>%
+   select(!c(QTD_EST, VAL_DOLAR)) %>%
+   filter(str_detect(DESC_NCM, c("Cebola|cebola|Cebolas|cebolas"))) %>%
+   mutate(PA = "Cebola")
+
+## Feijão
+zfeijao <- COMEX_97_22_COMP %>%
+   filter(ANO %in% 2007:2019) %>%
+   select(!c(QTD_EST, VAL_DOLAR)) %>%
+   filter(str_detect(DESC_NCM, c("Feijão|feijão|Feijao|feijao|Feijões|feijões|Feijoes|feijoes"))) %>%
+   mutate(PA = "Feijão")
+
+## Laranja
+zlaranja <- COMEX_97_22_COMP %>%
+   filter(ANO %in% 2007:2019) %>%
+   select(!c(QTD_EST, VAL_DOLAR)) %>%
+   filter(str_detect(DESC_NCM, c("Laranja|laranja|Laranjas|laranjas|Doces, geléias, \"marmelades\", pures e pastas, de cítricos|Farinhas, sêmolas e pós, dos produtos do capítulo 8|Cascas de frutos cítricos, de melões ou de melancias, frescas, secas, congeladas ou apresentadas em água salgada, sulfurada ou adicionada de outras substâncias destinadas a assegurar transitoriamente a sua conservação"))) %>%
+   mutate(PA = "Laranja")
+
+## Mandioca
+zmandioca <- COMEX_97_22_COMP %>%
+   filter(ANO %in% 2007:2019) %>%
+   select(!c(QTD_EST, VAL_DOLAR)) %>%
+   filter(str_detect(DESC_NCM, c("Mandioca|mandioca|Mandiocas|mandiocas"))) %>%
+   mutate(PA = "Mandioca")
+
+## Milho
+zmilho <- COMEX_97_22_COMP %>%
+   filter(ANO %in% 2007:2019) %>%
+   select(!c(QTD_EST, VAL_DOLAR)) %>%
+   filter(str_detect(DESC_NCM, c("Milho|milho|Milhos|milhos"))) %>%
+   filter(!(str_detect(DESC_NCM, c("Tomilho")))) %>%
+   mutate(PA = "Milho")
+
+## Soja
+zsoja <- COMEX_97_22_COMP %>%
+   filter(ANO %in% 2007:2019) %>%
+   select(!c(QTD_EST, VAL_DOLAR)) %>%
+   filter(str_detect(DESC_NCM, c("Soja|soja|Sojas|sojas|Margarina"))) %>%
+   mutate(PA = "Soja")
+
+## Tomate
+ztomate <- COMEX_97_22_COMP %>%
+   filter(ANO %in% 2007:2019) %>%
+   select(!c(QTD_EST, VAL_DOLAR)) %>%
+   filter(str_detect(DESC_NCM, c("Tomate|tomate|Tomates|tomates"))) %>%
+   mutate(PA = "Tomate")
+
+## Trigo
+ztrigo1 <- COMEX_97_22_COMP %>%
+   filter(ANO %in% 2007:2019) %>%
+   select(!c(QTD_EST, VAL_DOLAR)) %>%
+   filter(CATEG == "Trigo") %>%
+   mutate(PA = "Trigo")
+
+ztrigo2 <- COMEX_97_22_COMP %>%
+   filter(ANO %in% 2007:2019) %>%
+   select(!c(QTD_EST, VAL_DOLAR)) %>%
+   filter(DESC_NCM == "Preparações que contenham xilanase e betagluconase, com suporte de farinha de trigo, dos tipos utilizados na alimentação de animais") %>%
+   mutate(PA = "Trigo")
+
+## Leite
+zleite <- COMEX_97_22_COMP %>% 
+   filter(ANO %in% 2007:2019,
+          CATEG == "Lácteos") %>% 
+   select(!c(QTD_EST, VAL_DOLAR)) %>% 
+   mutate(PA = "Leite")
+
+## Ovos de galinha
+zovo <- COMEX_97_22_COMP %>% 
+   filter(ANO %in% 2007:2019,
+          CATEG == "Avicultura de postura") %>% 
+   select(!c(QTD_EST, VAL_DOLAR)) %>% 
+   mutate(PA = "Ovos de galinha")
+
+## Carcaça bovino
+zbovino <- COMEX_97_22_COMP %>% 
+   filter(ANO %in% 2007:2019,
+          CATEG == "Bovinocultura") %>% 
+   select(!c(QTD_EST, VAL_DOLAR)) %>% 
+   mutate(PA = "Bovinos")
+
+## Carcaça suíno
+zsuino <- COMEX_97_22_COMP %>% 
+   filter(ANO %in% 2007:2019,
+          CATEG == "Suinocultura") %>% 
+   select(!c(QTD_EST, VAL_DOLAR)) %>% 
+   mutate(PA = "Suínos")
+
+## Carcaça frango
+zfrango <- COMEX_97_22_COMP %>% 
+   filter(ANO %in% 2007:2019,
+          CATEG == "Avicultura de corte") %>% 
+   select(!c(QTD_EST, VAL_DOLAR)) %>%
+   mutate(PA = "Frango")
+
+```
+
+<br>
+
+```{r}
+# Unir bases agropecuárias e converter unidade de kg para milhões de toneladas
+COMEX_EXP_IMP <- rbind(zarroz, zbanana, zbatata, zcafe, zcebola, zfeijao, zlaranja, zmandioca, zmilho, zsoja, ztomate, ztrigo1, ztrigo2, zsucroalcool, zleite, zovo, zbovino, zsuino, zfrango) %>%
+   mutate(QTD_LIQ = (KG_LIQ/1000000000),
+          UNID = "Milhões de toneladas", .keep = "unused")
+
+# Salvando base de dados dos produtos agrícolas
+write_rds(COMEX_EXP_IMP, "~/R program/_IAIABr-main/COMEX/COMEX_DADOS/COMEX_RAW/COMEX_EXP_IMP.rds")
+
+rm(zarroz, zbanana, zbatata, zcafe, zcebola, zfeijao, zlaranja, zmandioca, zmilho, zsoja, ztomate, ztrigo1, ztrigo2, zsucroalcool, zleite, zovo, zbovino, zsuino, zfrango, COMEX_97_22_COMP)
+```
+
+
+<br>
+
+
+### Selecionando NCMs de produtos agropecuários
+
+<br>
+
+Após selecionar os produtos agropecuários, serão separadas as classificações NCMs desejadas de cada uma das cadeias. Essa seleção foi definida a partir de reunião como os membros do grupo.  
+
+<br>
+
+```{r}
+# Carregando dados completos dos produtos agropecuários a serem utilizados no trabalho
+COMEX_EXP_IMP <- read_rds("~/R program/_IAIABr-main/COMEX/COMEX_DADOS/COMEX_RAW/COMEX_EXP_IMP.rds")
+
+# Carregando dicionário para filtrar NCMs a serem utilizados no trabalho
+DICIO_NCM_PRIMARIOS <- read_xlsx("~/R program/_IAIABr-main/COMEX/COMEX_DADOS/INDICES/DICIO_NCM_PRIMARIOS.xlsx")
+
+# Filtrando os NCMs desejados (produtos primários)
+COMEX_EXP_IMP_PRIM <- inner_join(COMEX_EXP_IMP, DICIO_NCM_PRIMARIOS, by = c("PA", "DESC_NCM"))
+
+write_rds(COMEX_EXP_IMP_PRIM, "~/R program/_IAIABr-main/COMEX/COMEX_DADOS/COMEX_RAW/COMEX_EXP_IMP_PRIM.rds")
+
+rm(COMEX_EXP_IMP, DICIO_NCM_PRIMARIOS)
+```
+
+
+<br>
+<br>
+
+
+# Coleta e processamento de dados - População e Produção interna
+
+***
+
+<br>
+
+## População brasileira
+
+<br>
+
+```{r}
+POPUL <- data.frame(
+   ANO = as.factor(c(2007:2021)),
+   POPULA = c(183987291, 189605006, 191480630, 190732694, 192379287, 193904015, 201032714, 202768562, 204450049, 206081432, 207660929, 208494900, 210147125, 211755692, 213317639))
+```
+
+Ressalta-se que, entre os anos de 2011 e 2019, não houve realização do censo, sendo utilizado estimativas da população brasileira, de acordo com a taxa de crescimento dos censos anteriores.  
+
+
+<br>
+
+
+## Produção Agropecuária
+
+<br>
+<br>
+
+A quantidade produzida dos produtos: arroz, banana, batata, café, cebola, feijão, laranja, mandioca, milho, soja, tomate, trigo, carcaça de bovinos, suínos e frangos foram coletados do trabalho *Preços ao produtor e produtividade anual*, realizado pelo grupo. Assim, foi preciso coletar os dados de produção de açúcar, ovos de galinha e leite.  
+
+<br>
+
+### Produção de Açúcar
+
+Os dados de produção de açúcar foram coletados da série histórica de safras da CONAB.  
+
+```{r, eval=TRUE}
+# Localização da planilha bruta (sheet = "Açúcar")
+path = "~/R program/_IAIABr-main/COMEX/COMEX_DADOS/COMEX_RAW/PRODUCAO/PRODUCAO_RAW/CanaSerieHistZ-ZIndustria.xls"
+```
+
+Os dados da produção nacional foram coletados manualmente, via excel, e inseridos na planilha final de produção (`PROD`), já convertidos para a unidade de milhões de toneladas.  
+
+<br>
+
+### Produção de Leite e Ovo de galinha
+
+<br>
+
+Como os dados de produção dos produtos *Leite* e *Ovo de galinha* são registrados em Mil litros e Mil dúzias , respectivamente, se faz necessário converter suas unidades para a mesma base de análise, em milhões de toneladas.  
+
+<br>
+
+#### Leite
+
+```{r}
+PROD_LEITE <- read_excel("~/R program/_IAIABr-main/COMEX/COMEX_DADOS/COMEX_RAW/PROD_RAW/PROD_PEC.xlsx", sheet = "Leite")
+```
+
+
+##### Equação 1 - Conversão do *Leite* {-}
+
+<br>
+
+$$Leite \ _{MilhõesToneladas} = \frac{Produção \ total \ * \ Densidade \ do \ leite}{1000000}$$
+
+<br>
+
+```{r}
+# Conversão de mil litros para milhões de toneladas
+PROD_LEITE_CALC <- PROD_LEITE %>% 
+   group_by(PP, ANO) %>% 
+   summarise(QTD = sum(`QTD(mil L)`)) %>% 
+   mutate(QTD = (QTD*1.031)/1000000)
+
+rm(PROD_LEITE)
+```
+
+Assumindo que a [densidade média do leite](https://www.gov.br/agricultura/pt-br/assuntos/laboratorios/credenciamento-e-laboratorios-credenciados/legislacao-metodos-credenciados/arquivos-metodos-da-area-poa-iqa/met-poa-09-02-densidade-em-leite-fluido.pdf) , a 15°C é de 1.031 kg/L, podemos obter, a partir da equação acima, os valores de leite em milhões de toneladas.  
+
+<br>
+
+
+#### Ovo de galinha
+
+```{r}
+PROD_OVO <- read_excel("~/R program/_IAIABr-main/COMEX/COMEX_DADOS/COMEX_RAW/PROD_RAW/PROD_PEC.xlsx", sheet = "Ovos")
+
+```
+
+<br>
+
+##### Equação 2 - Conversão do *Ovo de galinha* {-}
+
+<br>
+
+$$Ovo \ de \ galinha \ _{MilhõesToneladas} = \frac{Produção \ total \ * \ Peso \ médio \ da \ dúzia \ de \ ovos}{1000000000}$$
+
+<br>
+
+```{r}
+# Conversão de mil dúzias para milhões de toNeladas
+PROD_OVO_CALC <- PROD_OVO %>% 
+   group_by(PP, ANO) %>% 
+   summarise(QTD = sum(`QTD(mil dúzias)`)) %>% 
+   mutate(QTD = (QTD*630)/1000000000)
+
+rm(PROD_OVO)
+```
+
+Assumindo que o [peso médio da dúzia de ovos](https://www.defesa.agricultura.sp.gov.br/legislacoes/decreto-56585-de-20-07-1965,359.html#:~:text=Tipo%201%20(extra)%20%2D%20com,e%20sessenta) é de 630 g/dúzia, podemos obter, a partir da equação acima, os valores de ovos de galinha em milhões de toneladas.  
+
+
+
+<br>
+
+```{r}
+PROD_OVO_LEITE <- rbind(PROD_LEITE_CALC, PROD_OVO_CALC)
+
+write_xlsx(PROD_OVO_LEITE, "~/R program/_IAIABr-main/COMEX/COMEX_DADOS/COMEX_RAW/PROD_RAW/PROD_OVO-LEITE.xlsx")
+
+rm(PROD_LEITE_CALC, PROD_OVO_CALC, PROD_OVO_LEITE, path)
+```
+
+Os valores de todas as produções internas foram compiladas no documento `PRODUCAO.xlsx`.  
+
+<br>
+
+### Produção final
+
+```{r}
+PROD <- read_excel("~/R program/_IAIABr-main/COMEX/COMEX_DADOS/COMEX_RAW/PRODUCAO.xlsx")
+```
+
+```{r}
+# Organizando a produção final - valores em milhões de toneladas
+PROD_V1 <- PROD %>% 
+   filter(ANO %in% c(2007:2019)) %>% 
+   pivot_longer(cols = c(2:20),
+                names_to = "PRODUTO",
+                values_to = "QTD_PROD") %>% 
+   mutate(UNID = "Milhões de toneladas") %>% 
+   arrange(PRODUTO)
+   
+DICIO_PROD <- data.frame(
+   PRODUTO = unique(PROD_V1$PRODUTO),
+PA = c("Açúcar", "Arroz", "Banana", "Batata", "Cacau", "Café", "Bovinos", "Frango", "Suínos", "Cebola", "Feijão", "Laranja", "Leite", "Mandioca", "Milho", "Ovos de galinha", "Soja", "Tomate", "Trigo")
+)
+
+PROD_J <- full_join(PROD_V1, DICIO_PROD, by = "PRODUTO")
+
+PROD_J <- PROD_J %>% 
+   select(ANO, PA, QTD_PROD)
+
+rm(PROD_V1, DICIO_PROD, PROD)
+
+```
+
+
+<br>
+
+
+# Banco de dados para análise - Cálculo de variáveis e Planilhas
+***
+
+<br>
+<br>
+
+## Índice de conversão para laranja, leite e ovos de galinha
+
+<br>
+
+### Suco de laranja
+
+```{r}
+# Selecionando o banco de dados da laranja
+COMEX_EXP_IMP_PRIM <- read_rds("~/R program/_IAIABr-main/COMEX/COMEX_DADOS/COMEX_RAW/COMEX_EXP_IMP_PRIM.rds")
+
+LARANJA <- COMEX_EXP_IMP_PRIM %>% 
+   filter(PA == "Laranja")
+
+# Importando o índice de conversão da laranja
+IND_CONV_LARANJA <- read_xlsx("~/R program/_IAIABr-main/COMEX/COMEX_DADOS/INDICES/INDICE_CONVERC_LARANJA.xlsx",
+                              sheet = "Indexador") %>% 
+   mutate(ANO = as.factor(ANO))
+
+# Juntando o índice de conversão com a laranja
+LARANJA_V1 <- full_join(LARANJA, IND_CONV_LARANJA, by = c("DESC_NCM", "ANO"))
+
+# Realizando a conversão
+LARANJA_V2 <- LARANJA_V1 %>% 
+   mutate(QTD_LIQ = round((QTD_LIQ*IND_CONVER), 10)) %>% 
+   select(!IND_CONVER)
+
+rm(LARANJA, IND_CONV_LARANJA, LARANJA_V1)
+```
+
+<br>
+
+### Ovos de galinha
+
+```{r}
+# Selecionando o banco de dados de Ovos de galinha
+OVO <- COMEX_EXP_IMP_PRIM %>% 
+   filter(PA == "Ovos de galinha")
+
+# Importando o índice de conversão de Ovos de galinha
+IND_CONV_OVO <- read_xlsx("~/R program/_IAIABr-main/COMEX/COMEX_DADOS/INDICES/INDICE_CONVERC_OVO_LEITE.xlsx",
+                              sheet = "OVO")
+
+# Juntando o índice de conversão com os Ovos de galinha
+OVO_V1 <- full_join(OVO, IND_CONV_OVO, by = "DESC_NCM")
+
+# Realizando a conversão
+OVO_V2 <- OVO_V1 %>% 
+   mutate(QTD_LIQ = round((QTD_LIQ*IND_CONVER), 10)) %>% 
+   select(!IND_CONVER)
+
+rm(OVO, OVO_V1, IND_CONV_OVO)
+```
+
+<br>
+
+### Produtos lácteos
+
+```{r}
+# Selecionando o banco de dados de leite
+LEITE <- COMEX_EXP_IMP_PRIM %>%
+   filter(PA == "Leite")
+
+# Importando o índice de conversão de leite
+IND_CONV_LEITE <- read_xlsx("~/R program/_IAIABr-main/COMEX/COMEX_DADOS/INDICES/INDICE_CONVERC_OVO_LEITE.xlsx",
+                              sheet = "LEITE")
+
+# Juntando o índice de conversão com os Ovos de galinha
+LEITE_V1 <- full_join(LEITE, IND_CONV_LEITE, by = "DESC_NCM")
+
+# Realizando a conversão
+LEITE_V2 <- LEITE_V1 %>%
+   mutate(QTD_LIQ = round((QTD_LIQ*IND_CONVER), 10)) %>%
+   select(!IND_CONVER)
+
+rm(LEITE, LEITE_V1, IND_CONV_LEITE)
+```
+
+<br>
+
+### Modificando o banco de dados com as correções dos índices
+
+```{r}
+COMEX_EXP_IMP_PRIM_V1 <- COMEX_EXP_IMP_PRIM %>% 
+   filter(!(PA %in% c("Laranja", "Leite", "Ovos de galinha")))
+
+COMEX_EXP_IMP_PRIM_V2 <- rbind(COMEX_EXP_IMP_PRIM_V1, LARANJA_V2)
+
+COMEX_EXP_IMP_PRIM_V3 <- rbind(COMEX_EXP_IMP_PRIM_V2, OVO_V2)
+
+COMEX_EXP_IMP_PRIM_V4 <- rbind(COMEX_EXP_IMP_PRIM_V3, LEITE_V2)
+
+# Banco de dados final
+COMEX_EXP_IMP_PRIM_FINAL <- COMEX_EXP_IMP_PRIM_V4
+   
+
+write_rds(COMEX_EXP_IMP_PRIM_FINAL, "~/R program/_IAIABr-main/COMEX/COMEX_DADOS/COMEX_RAW/COMEX_EXP_IMP_PRIM_FINAL.rds")
+
+rm(COMEX_EXP_IMP_PRIM_V1, COMEX_EXP_IMP_PRIM_V2, COMEX_EXP_IMP_PRIM_V3, COMEX_EXP_IMP_PRIM_V4, LARANJA_V2, OVO_V2, LEITE_V2, COMEX_EXP_IMP_PRIM)
+```
+
+<br>
+
+Código para coletar as informações que serão colocadas na aba "Geral" de cada planilha correspondente às culturas agrícolas
+
+```{r}
+COMEX_EXP_IMP_PRIM_FINAL <- read_rds("~/R program/_IAIABr-main/COMEX/COMEX_DADOS/COMEX_RAW/COMEX_EXP_IMP_PRIM_FINAL.rds")
+
+COMEX_GERAL <- COMEX_EXP_IMP_PRIM_FINAL %>% 
+   pivot_wider(names_from = TIPO_OP,
+               values_from = QTD_LIQ) %>% 
+   rename("EXP" = `Exportação`,
+          "IMP" = `Importação`) %>% 
+   arrange(PA, ANO, CATEG) %>% 
+   replace_na(list(EXP = 0, IMP = 0))
+
+write_xlsx(COMEX_GERAL, "~/R program/_IAIABr-main/COMEX/COMEX_DADOS/COMEX_PLANILHAS/_COMEX_AGRIC_GERAL_VersaoX.xlsx")
+
+```
+
+<br>
+
+Cálculos para as segundas partes das planilhas
+
+```{r}
+COMEX_EXP_IMP_CALC <- COMEX_GERAL %>%
+   group_by(ANO, PA) %>%
+   summarise(EXP = sum(EXP),
+             IMP = sum(IMP)) %>%
+   replace_na(list(EXP = 0, IMP = 0)) %>% 
+   arrange(PA, ANO)
+
+rm(COMEX_GERAL)
+```
+
+<br>
+
+```{r}
+# Juntando cálculos com população e produção
+
+COMEX_EXP_IMP_CALC_V1 <- full_join(COMEX_EXP_IMP_CALC, POPUL, by = c("ANO"))
+
+
+## Juntando com Produção
+COMEX_EXP_IMP_CALC_V2 <- full_join(COMEX_EXP_IMP_CALC_V1, PROD_J, by = c("ANO", "PA"))
+
+rm(COMEX_EXP_IMP_CALC, COMEX_EXP_IMP_CALC_V1, PROD_J, POPUL)
+```
+
+<br>
+
+```{r}
+COMEX_AGROPEC_FINAL <- COMEX_EXP_IMP_CALC_V2 %>% 
+   replace_na(list(EXP = 0, IMP = 0)) %>% 
+   mutate(SALDO = EXP - IMP,
+          DISPONIBILIDADE = (QTD_PROD + IMP - EXP),
+          `EXP/PROD(%)` = ((EXP/QTD_PROD)*100),
+          `IMP/PROD(%)` = ((IMP/QTD_PROD)*100),
+          `SALDO/PROD(%)` = ((SALDO/QTD_PROD)*100),
+          `DISP/CAPITA(KG)` = (DISPONIBILIDADE*1000000000)/POPULA) %>% 
+   select(1,2,6,3,4,7,5,8:12)
+
+
+write_xlsx(COMEX_AGROPEC_FINAL, "~/R program/_IAIABr-main/COMEX/COMEX_DADOS/COMEX_PLANILHAS/_COMEX_AGRIC_FINAL_VersaoX.xlsx")
+
+write_rds(COMEX_AGROPEC_FINAL, "~/R program/_IAIABr-main/COMEX/COMEX_DADOS/COMEX_RAW/COMEX_AGROPEC_FINAL.rds")
+
+rm(COMEX_EXP_IMP_CALC_V2, COMEX_EXP_IMP_PRIM_FINAL)
+```
+
+
+<br>
+<br>
+
+# Referências {-}

@@ -1,0 +1,307 @@
+---
+title: "Relatório - Disponibilidade interna de produtos agropecuários"
+author: "Gustavo Jun Yakushiji"
+date: "Última atualização no dia `r format(Sys.time(), '%d de %B de %Y')`"
+output:
+  html_document:
+    number_sections: true
+    toc: true
+    toc_float: true
+---
+
+```{r setup, echo=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE
+                      ,results = 'show'
+                      ,error=FALSE
+                      ,warning=FALSE
+                      ,message=TRUE)
+options(scipen=999)
+
+# Bibliotecas
+library(plyr)
+library(tidyverse)
+library(readxl)
+library(writexl)
+library(devtools)
+library(knitr)
+library(kableExtra)
+```
+
+<br>
+
+# Banco de dados {-}
+
+<br>
+
+```{r, message=FALSE}
+COMEX_AGROPEC_FINAL <- read_rds("~/R program/_IAIABr-main/COMEX/COMEX_DADOS/COMEX_RAW/COMEX_AGROPEC_FINAL.rds")
+
+glimpse(COMEX_AGROPEC_FINAL)
+```
+
+<br>
+
+
+# Relações percentuais
+
+<br>
+
+```{r}
+COMEX_AGROPEC_FINAL %>%
+   select(ANO, PA, `EXP/PROD(%)`, `IMP/PROD(%)`, `SALDO/PROD(%)`) %>%
+   group_by(PA) %>%
+   summarise(`EXP/PROD(%)` = round(mean(`EXP/PROD(%)`), 2),
+             `IMP/PROD(%)` = round(mean(`IMP/PROD(%)`), 2),
+             `SALDO/PROD(%)` = round(mean(`SALDO/PROD(%)`), 2)) %>%
+   rename("Produto" = PA) %>% 
+   kbl(table.attr = "style = \"color: black;\"", position = "c")%>%
+   kable_styling(font_size = 16, position = "c", full_width = FALSE)
+```
+
+<br>
+<br>
+
+# Disponibilidade per capita
+
+<br>
+
+## Valores índice
+
+<br>
+
+```{r}
+COMEX_DISP_PER_INDICE <- read_excel("~/R program/_IAIABr-main/COMEX/COMEX_DADOS/COMEX_RAW/DISP_INDICE.xlsx", 
+    sheet = "disp per capita")
+
+glimpse(COMEX_DISP_PER_INDICE)
+```
+
+<br>
+
+```{r}
+disp.per.indice <- COMEX_DISP_PER_INDICE %>% 
+   pivot_longer(cols = c(2:20),
+                names_to = "PA",
+                values_to = "DISP/CAPITA(KG)") %>% 
+   mutate(CATEG = case_when(
+      PA %in% c("Açúcar", "Bovinos", "Café", "Frango", "Laranja", "Milho", "Soja", "Suínos") ~ "Predomínio exportação",
+      PA %in% c("Batata", "Cebola", "Feijão", "Trigo", "Cacau") ~ "Predomínio importação",
+      PA %in% c("Banana", "Mandioca", "Ovos de galinha", "Tomate") ~ "Sem mercado internacional",
+      PA %in% c("Arroz", "Leite") ~ "Pequeno saldo comercial"
+   )) %>% 
+   mutate(PA = case_when(
+      PA == "Açúcar" ~ "Cana-de-açúcar",
+      PA == "Frango" ~ "Avicultura Corte",
+      PA == "Suínos" ~ "Suinocultura",
+      PA == "Bovinos" ~ "Bovinocultura Corte",
+      PA == "Ovos de galinha" ~ "Avicultura Postura",
+      PA == "Leite" ~ "Bovinocultura Leite",
+      TRUE ~ as.character(PA))) %>% 
+   mutate(ANO = as.character(ANO),
+          `DISP/CAPITA(KG)` = round(`DISP/CAPITA(KG)`, 2)) %>% 
+   arrange(PA)
+
+glimpse(disp.per.indice)
+```
+
+<br>
+
+### Predomínio exportação
+
+<br>
+
+```{r}
+# Tabela
+disp.per.indice %>% 
+   filter(CATEG == "Predomínio exportação") %>% 
+   select(!CATEG) %>% 
+   pivot_wider(names_from = "PA",
+               values_from = "DISP/CAPITA(KG)") %>% 
+   kbl(table.attr = "style = \"color: black;\"", position = "c")%>%
+   kable_styling(font_size = 16, position = "c", full_width = FALSE)
+```
+
+<br>
+
+```{r}
+# Gráfico
+disp.per.indice %>% 
+   filter(CATEG == "Predomínio exportação") %>%
+   mutate(PA = factor(PA, levels = c("Cana-de-açúcar", "Café", "Soja", "Laranja", "Avicultura Corte", "Milho", "Suinocultura", "Bovinocultura Corte"))) %>% 
+   ggplot(aes(x=ANO, y = `DISP/CAPITA(KG)`, group = PA))+
+   geom_line(show.legend = F)+
+   # geom_smooth(method = "lm", formula = 'y ~ x', se = F, color = "red", linetype = 3)+
+   facet_wrap(~PA, ncol = 4)+
+   geom_hline(yintercept = 100, color = "red", linetype = 2)+
+   theme_bw()+
+   theme(axis.text.x = element_text(angle = 90, vjust = 0.6))+
+   labs(x = NULL, y = "kg/capita", color = "Cadeia")#+
+   # stat_poly_eq(aes(label = paste(after_stat(eq.label),
+   #              after_stat(rr.label), sep = "*\", \"*")),
+   #              label.x = 0.05, label.y = 1, size = 2.5)
+```
+
+<br>
+
+### Predomínio importação
+
+<br>
+
+```{r}
+# Tabela
+disp.per.indice %>% 
+   filter(CATEG == "Predomínio importação") %>% 
+   select(!CATEG) %>% 
+   pivot_wider(names_from = "PA",
+               values_from = "DISP/CAPITA(KG)") %>% 
+   kbl(table.attr = "style = \"color: black;\"", position = "c")%>%
+   kable_styling(font_size = 16, position = "c", full_width = FALSE)
+```
+
+<br>
+
+```{r}
+# Gráfico
+disp.per.indice %>% 
+   filter(CATEG == "Predomínio importação", PA != "Cacau") %>% 
+   mutate(PA = factor(PA, levels = c("Feijão", "Batata", "Cebola", "Trigo", "Cacau"))) %>% 
+   ggplot(aes(x=ANO, y = `DISP/CAPITA(KG)`, group = PA))+
+   geom_line()+
+   # geom_smooth(method = "lm", formula = 'y ~ x', se = F, color = "red", linetype = 3)+
+   facet_wrap(~PA, ncol = 2)+
+   geom_hline(yintercept = 100, color = "red", linetype = 2)+
+   theme_bw()+
+   theme(axis.text.x = element_text(angle = 90, vjust = 0.6))+
+   labs(x = NULL, y = "kg/capita", color = "Cadeia")#+
+   # stat_poly_eq(aes(label = paste(after_stat(eq.label),
+   #              after_stat(rr.label), sep = "*\", \"*")),
+   #              label.x = 0.95, label.y = 0.95, size = 3)
+```
+
+<br>
+
+### Sem mercado internacional
+
+<br>
+
+```{r}
+# Tabela
+disp.per.indice %>% 
+   filter(CATEG == "Sem mercado internacional") %>% 
+   select(!CATEG) %>% 
+   pivot_wider(names_from = "PA",
+               values_from = "DISP/CAPITA(KG)") %>% 
+   kbl(table.attr = "style = \"color: black;\"", position = "c")%>%
+   kable_styling(font_size = 16, position = "c", full_width = FALSE)
+```
+
+<br>
+
+```{r}
+# Gráfico
+disp.per.indice %>% 
+   filter(CATEG == "Sem mercado internacional") %>% 
+   mutate(PA = factor(PA, levels = c("Banana", "Avicultura Postura", "Mandioca", "Tomate"))) %>% 
+   ggplot(aes(x=ANO, y = `DISP/CAPITA(KG)`, group = PA))+
+   geom_line()+
+   # geom_smooth(method = "lm", formula = 'y ~ x', se = F, color = "red", linetype = 3)+
+   facet_wrap(~PA, ncol = 2)+
+   geom_hline(yintercept = 100, color = "red", linetype = 2)+
+   theme_bw()+
+   theme(axis.text.x = element_text(angle = 90, vjust = 0.6))+
+   labs(x = NULL, y = "kg/capita", color = "Cadeia")#+
+   # stat_poly_eq(aes(label = paste(after_stat(eq.label),
+   #              after_stat(rr.label), sep = "*\", \"*")),
+   #              label.x = 0.05, label.y = 0.95, size = 3)
+```
+
+<br>
+
+### Pequeno saldo comercial
+
+<br>
+
+```{r}
+# Tabela
+disp.per.indice %>% 
+   filter(CATEG == "Pequeno saldo comercial") %>% 
+   select(!CATEG) %>% 
+   pivot_wider(names_from = "PA",
+               values_from = "DISP/CAPITA(KG)") %>% 
+   kbl(table.attr = "style = \"color: black;\"", position = "c")%>%
+   kable_styling(font_size = 16, position = "c", full_width = FALSE)
+```
+
+<br>
+
+```{r}
+# Gráfico
+disp.per.indice %>% 
+   filter(CATEG == "Pequeno saldo comercial") %>% 
+   mutate(PA = factor(PA, levels = c("Arroz", "Bovinocultura Leite"))) %>% 
+   ggplot(aes(x=ANO, y = `DISP/CAPITA(KG)`, group = PA))+
+   geom_line()+
+   # geom_smooth(method = "lm", formula = 'y ~ x', se = F, color = "red", linetype = 3)+
+   facet_wrap(~PA, ncol = 1)+
+   geom_hline(yintercept = 100, color = "red", linetype = 2)+
+   ylim(70, 140)+
+   theme_bw()+
+   theme(axis.text.x = element_text(angle = 90, vjust = 0.6))+
+   labs(x = NULL, y = "kg/capita", color = "Cadeia")#+
+   # stat_poly_eq(aes(label = paste(after_stat(eq.label),
+   #              after_stat(rr.label), sep = "*\", \"*")),
+   #              label.x = 0.5, label.y = 0.1, size = 3)
+```
+
+<br>
+<br>
+
+# Valores estatísticos
+
+<br>
+
+## Valores índice
+
+```{r}
+mod1 <- disp.per.indice %>%
+   mutate(ANO = as.numeric(ANO)) %>%
+   group_by(PA, CATEG) %>%
+   do(tidy(lm(`DISP/CAPITA(KG)` ~ ANO, data = .))) %>%
+   select(PA, CATEG, term, estimate) %>%
+   filter(term == "ANO") %>%
+   select(-term) %>%
+   rename("coef.ang" = estimate) %>%
+   mutate(coef.ang = round(as.numeric(coef.ang), 3))
+
+mod2 <- disp.per.indice %>%
+   mutate(ANO = as.numeric(ANO)) %>%
+   group_by(PA, CATEG) %>%
+   do(glance(lm(`DISP/CAPITA(KG)` ~ ANO, data = .))) %>%
+   select(PA, p.value, r.squared) %>%
+   mutate(p.value = round(as.numeric(p.value), 3),
+          r.squared = round(as.numeric(r.squared), 3))
+
+est_bb <- disp.per.indice %>%
+   group_by(PA, CATEG) %>%
+   summarise(media = round(mean(`DISP/CAPITA(KG)`), 3),
+             desv_p = round(sd(`DISP/CAPITA(KG)`), 3),
+             quantil_5p = round(quantile(`DISP/CAPITA(KG)`, 0.05), 3),
+             quantil_95p = round(quantile(`DISP/CAPITA(KG)`, 0.95), 3))
+
+
+ESTAT_V <- full_join(est_bb, mod1, by = c("PA", "CATEG"))
+
+ESTAT <- full_join(ESTAT_V, mod2, by = c("PA", "CATEG")) %>%
+   arrange(CATEG)
+names(ESTAT) <- c("Cadeia", "Classificação", "Média", "Desvio padrão", "Quantil 5%", "Quantil 95%", "Coef.ang.", "p-valor", "r²")
+
+ESTAT %>% 
+   kbl(table.attr = "style = \"color: black;\"", position = "c")%>%
+   kable_styling(font_size = 16, position = "c", full_width = FALSE)
+
+rm(ESTAT_V, mod1, mod2, est_bb)
+```
+
+
+<br>
+<br>
