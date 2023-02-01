@@ -1,0 +1,426 @@
+---
+title: "Relatório - Disponibilidade interna de produtos agropecuários"
+author: "Gustavo Jun Yakushiji"
+date: "Última atualização no dia `r format(Sys.time(), '%d de %B de %Y')`"
+output:
+  html_document:
+    number_sections: true
+    toc: true
+    toc_float: true
+---
+
+```{r setup, echo=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE
+                      ,results = 'show'
+                      ,error=FALSE
+                      ,warning=FALSE
+                      ,message=TRUE)
+options(scipen=999)
+
+# Bibliotecas
+library(tidyverse)
+library(readxl)
+library(writexl)
+library(devtools)
+library(knitr)
+library(kableExtra)
+library(broom)
+```
+
+<br>
+
+# Banco de dados {-}
+
+<br>
+
+```{r, message=FALSE}
+COMEX_AGROPEC_FINAL <- read_rds("~/R program/_IAIABr-main/_Artigo_Internacional/Script/DATA_BASE/Raw/COMEX_AGROPEC_FINAL.rds")
+
+glimpse(COMEX_AGROPEC_FINAL)
+```
+
+<br>
+
+
+# Relações percentuais
+
+<br>
+
+```{r}
+COMEX_AGROPEC_FINAL %>%
+   select(ANO, PA, `EXP/PROD(%)`, `IMP/PROD(%)`, `SALDO/PROD(%)`) %>%
+   group_by(PA) %>%
+   summarise(`EXP/PROD(%)` = round(mean(`EXP/PROD(%)`), 1),
+             `IMP/PROD(%)` = round(mean(`IMP/PROD(%)`), 1),
+             `SALDO/PROD(%)` = round(mean(`SALDO/PROD(%)`), 1)) %>%
+   mutate(PA = case_when(
+      PA == "Açúcar" ~ "Cana-de-açúcar",
+      PA == "Frango" ~ "Avicultura Corte",
+      PA == "Suínos" ~ "Suinocultura",
+      PA == "Bovinos" ~ "Bovinocultura Corte",
+      PA == "Ovos de galinha" ~ "Avicultura Postura",
+      PA == "Leite" ~ "Bovinocultura Leite",
+      PA == "Laranja" ~ "Citros",
+      TRUE ~ as.character(PA))) %>% 
+   rename("Produto" = PA) %>% 
+   kbl(table.attr = "style = \"color: black;\"", position = "c")%>%
+   kable_styling(font_size = 16, position = "c", full_width = FALSE)
+```
+
+<br>
+<br>
+
+# Disponibilidade per capita
+
+<br>
+
+## Valores índice
+
+<br>
+
+```{r}
+COMEX_DISP_PER_INDICE <- read_excel("~/R program/_IAIABr-main/_Artigo_Internacional/Script/DATA_BASE/DISP_INDICE.xlsx", 
+    sheet = "indice")
+
+glimpse(COMEX_DISP_PER_INDICE)
+```
+
+<br>
+
+```{r}
+disp.per.indice <- COMEX_DISP_PER_INDICE %>% 
+   mutate(CATEG = case_when(
+      PA %in% c("Açúcar", "Bovinos", "Café", "Frango", "Laranja", "Milho", "Soja", "Suínos", "Trigo", "Cacau", "Cebola") ~ "Comercializáveis",
+      PA %in% c("Arroz", "Leite", "Batata", "Feijão") ~ "Medianamente comercializáveis",
+      PA %in% c("Banana", "Mandioca", "Ovos de galinha", "Tomate") ~ "Não comercializáveis"
+   )) %>% 
+   mutate(PA = case_when(
+      PA == "Açúcar" ~ "Cana-de-açúcar",
+      PA == "Frango" ~ "Avicultura Corte",
+      PA == "Suínos" ~ "Suinocultura",
+      PA == "Bovinos" ~ "Bovinocultura Corte",
+      PA == "Ovos de galinha" ~ "Avicultura Postura",
+      PA == "Leite" ~ "Bovinocultura Leite",
+      PA == "Laranja" ~ "Citros",
+      TRUE ~ as.character(PA))) %>% 
+   mutate(ANO = as.character(ANO),
+          `Índice 100` = round(`Índice 100`, 1),
+          `Índice 100` = round(`Índice 100`, 1)) %>% 
+   arrange(PA)
+
+glimpse(disp.per.indice)
+```
+
+<br>
+
+### Comercializáveis
+
+<br>
+
+```{r}
+# Tabela
+disp.per.indice %>% 
+   filter(CATEG == "Comercializáveis") %>% 
+   select(!c(CATEG, `DISP/CAPITA(KG)`)) %>% 
+   pivot_wider(names_from = "PA",
+               values_from = "Índice 100") %>% 
+   kbl(table.attr = "style = \"color: black;\"", position = "c")%>%
+   kable_styling(font_size = 16, position = "c", full_width = FALSE)
+```
+
+<br>
+
+```{r}
+# Gráfico
+# disp.per.indice %>% 
+#    filter(CATEG == "Comercializáveis") %>%
+#    mutate(PA = factor(PA, levels = c("Cana-de-açúcar", "Café", "Soja", "Citros", "Avicultura Corte", "Milho", "Suinocultura", "Bovinocultura Corte", "Cebola", "Cacau", "Trigo"))) %>% 
+#    ggplot(aes(x=ANO, y = `Índice 100`, group = PA))+
+#    geom_line(show.legend = F, size = 0.8)+
+#    geom_smooth(method = "lm", formula = 'y ~ x', se = F, color = "red", linetype = "dashed")+
+#    facet_wrap(~PA, ncol = 3, scales = "free")+
+#    theme_minimal()+
+#    theme(axis.text.x = element_text(angle = 90, vjust = 0.6))+
+#    labs(x = NULL, y = "kg per capita", color = "Cadeia")
+```
+
+
+```{r}
+# Gráfico
+graf_comerc <- disp.per.indice %>% 
+   filter(CATEG == "Comercializáveis") %>%
+   mutate(PA = factor(PA, levels = c("Cana-de-açúcar", "Café", "Soja", "Citros", "Avicultura Corte", "Milho", "Suinocultura", "Bovinocultura Corte", "Cebola", "Cacau", "Trigo")))
+
+graf_comerc %>% filter(PA %in% c("Cana-de-açúcar", "Café", "Soja", "Citros","Avicultura Corte", "Milho","Suinocultura", "Bovinocultura Corte")) %>% 
+ggplot(aes(x=ANO, y = `Índice 100`, group = PA))+
+   geom_line(show.legend = F, size = 0.8)+
+   geom_smooth(method = "lm", formula = 'y ~ x', se = F, color = "red", linetype = "dashed")+
+   facet_wrap(~PA, ncol = 4, scales = "free")+
+   scale_x_continuous(breaks = seq(2007, 2021, 1))+
+   theme_minimal()+
+   theme(axis.text.x = element_text(angle = 90, vjust = 0.6),
+         strip.text.x = element_text(size = 18, face = "bold"),
+         axis.text = element_text(size = 13),
+         axis.title.y = element_text(size = 15))+
+   labs(x = NULL, y = "kg per capita", color = "Cadeia")
+
+
+graf_comerc %>% filter(PA %in% c("Cebola", "Cacau", "Trigo")) %>% 
+ggplot(aes(x=ANO, y = `Índice 100`, group = PA))+
+   geom_line(show.legend = F, size = 0.8)+
+   geom_smooth(method = "lm", formula = 'y ~ x', se = F, color = "red", linetype = "dashed")+
+   facet_wrap(~PA, ncol = 3, scales = "free")+
+   scale_x_continuous(breaks = seq(2007, 2021, 1))+
+   theme_minimal()+
+   theme(axis.text.x = element_text(angle = 90, vjust = 0.6),
+         strip.text.x = element_text(size = 18, face = "bold"),
+         axis.text = element_text(size = 15),
+         axis.title.y = element_text(size = 15))+
+   labs(x = NULL, y = "kg per capita", color = "Cadeia")
+```
+
+
+<br>
+
+### Medianamente comercializáveis
+
+<br>
+
+```{r}
+# Tabela
+disp.per.indice %>% 
+   filter(CATEG == "Medianamente comercializáveis") %>% 
+   select(!c(CATEG, `DISP/CAPITA(KG)`)) %>% 
+   pivot_wider(names_from = "PA",
+               values_from = "Índice 100") %>% 
+   kbl(table.attr = "style = \"color: black;\"", position = "c")%>%
+   kable_styling(font_size = 16, position = "c", full_width = FALSE)
+```
+
+<br>
+
+```{r}
+# Gráfico
+disp.per.indice %>% 
+   filter(CATEG == "Medianamente comercializáveis") %>% 
+   mutate(PA = factor(PA, levels = c("Arroz", "Feijão", "Bovinocultura Leite", "Batata"))) %>% 
+   ggplot(aes(x=ANO, y = `Índice 100`, group = PA))+
+   geom_line(size = 0.8)+
+   geom_smooth(method = "lm", formula = 'y ~ x', se = F, color = "red", linetype = "dashed")+
+   facet_wrap(~PA, ncol = 2, scales = "free")+
+   scale_x_continuous(breaks = seq(2007, 2021, 1))+
+   theme_minimal()+
+   theme(axis.text.x = element_text(angle = 90, vjust = 0.6),
+         strip.text.x = element_text(size = 13, face = "bold"),
+         axis.text = element_text(size = 11),
+         axis.title.y = element_text(size = 13))+
+   labs(x = NULL, y = "kg per capita", color = "Cadeia")
+   # ggpmisc::stat_poly_eq(aes(label = paste(after_stat(eq.label),
+   #              after_stat(rr.label), sep = "*\", \"*")),
+   #              label.x = 0.95, label.y = 0.95, size = 3)
+```
+
+<br>
+
+### Não comercializáveis
+
+<br>
+
+```{r}
+# Tabela
+disp.per.indice %>% 
+   filter(CATEG == "Não comercializáveis") %>% 
+   select(!c(CATEG, `DISP/CAPITA(KG)`)) %>% 
+   pivot_wider(names_from = "PA",
+               values_from = "Índice 100") %>% 
+   kbl(table.attr = "style = \"color: black;\"", position = "c")%>%
+   kable_styling(font_size = 16, position = "c", full_width = FALSE)
+```
+
+<br>
+
+```{r}
+# Gráfico
+disp.per.indice %>% 
+   filter(CATEG == "Não comercializáveis") %>% 
+   mutate(PA = factor(PA, levels = c("Banana", "Avicultura Postura", "Tomate", "Mandioca"))) %>% 
+   ggplot(aes(x=ANO, y = `Índice 100`, group = PA))+
+   geom_line(size = 0.8)+
+   geom_smooth(method = "lm", formula = 'y ~ x', se = F, color = "red", linetype = "dashed")+
+   facet_wrap(~PA, ncol = 2, scales = "free")+
+   scale_x_continuous(breaks = seq(2007, 2021, 1))+
+   theme_minimal()+
+   theme(axis.text.x = element_text(angle = 90, vjust = 0.6),
+         strip.text.x = element_text(size = 13, face = "bold"),
+         axis.text = element_text(size = 11),
+         axis.title.y = element_text(size = 13))+
+   labs(x = NULL, y = "kg per capita", color = "Cadeia")#+
+   # stat_poly_eq(aes(label = paste(after_stat(eq.label),
+   #              after_stat(rr.label), sep = "*\", \"*")),
+   #              label.x = 0.05, label.y = 0.95, size = 3)
+```
+
+<br>
+<br>
+
+# Valores estatísticos
+
+<br>
+
+## Valores índice
+
+
+```{r}
+# Tabela estatísticas grupos
+disp.per.indice %>% 
+   group_by(CATEG) %>%
+   summarise(media = round(mean(`Índice 100`), 1),
+             desv_p = round(sd(`Índice 100`), 1),
+             cv = round((sd(`Índice 100`)/mean(`Índice 100`))*100, 1)) %>% 
+   kbl(table.attr = "style = \"color: black;\"", position = "c")%>%
+   kable_styling(font_size = 16, position = "c", full_width = FALSE)
+```
+
+
+```{r}
+# Tabela estatísticas cadeias
+est_b <- disp.per.indice %>%
+   group_by(PA, CATEG) %>%
+   summarise(Media = round(mean(`Índice 100`), 2),
+             DesvPad = round(sd(`Índice 100`), 2),
+             CV = round((sd(`Índice 100`)/mean(`Índice 100`))*100, 2))
+
+mod1 <- disp.per.indice %>%
+   mutate(ANO = as.numeric(ANO)) %>%
+   group_by(PA, CATEG) %>%
+   do(tidy(lm(`Índice 100` ~ ANO, data = .))) %>%
+   select(PA, CATEG, term, estimate) %>%
+   filter(term == "ANO") %>%
+   select(-term) %>%
+   rename(coef.ang = estimate) %>%
+   mutate(coef.ang = round(as.numeric(coef.ang), 3))
+
+mod2 <- disp.per.indice %>%
+   mutate(ANO = as.numeric(ANO)) %>%
+   group_by(PA, CATEG) %>%
+   do(glance(lm(`Índice 100` ~ ANO, data = .))) %>%
+   select(PA, r.squared, p.value) %>%
+   mutate(r.squared = round(as.numeric(r.squared), 3),
+          p.value = round(as.numeric(p.value), 3),
+          signif = if_else(
+             p.value <= 0.01, "1% ***",
+             if_else(0.01 < p.value & p.value <= 0.05,"5% **",
+                     if_else(0.05 < p.value & p.value <= 0.1, "10% *", "> 10%"
+))))
+
+
+ESTAT_V <- full_join(est_b, mod1, by = c("PA", "CATEG"))
+
+ESTAT <- full_join(ESTAT_V, mod2, by = c("PA", "CATEG")) %>%
+   arrange(CATEG, signif)
+
+names(ESTAT) <- c("Cadeia", "Classificação", "Média", "Desvio padrão", "Coeficiente Variação", "Coef.ang.", "r²", "p-valor", "Significância")
+
+ESTAT %>% 
+   kbl(table.attr = "style = \"color: black;\"", position = "c")%>%
+   kable_styling(font_size = 16, position = "c", full_width = FALSE)
+
+rm(ESTAT_V, mod1, mod2, est_b)
+```
+
+
+
+<br>
+<br>
+
+
+
+```{r eval=TRUE, include=TRUE, echo = FALSE}
+# Durbin Watson e KPSS
+
+library(car)
+library(tseries)
+
+# Valor índice per capita
+# # Testes séries temporais
+disp.per.indice <- disp.per.indice %>%
+   mutate(ANO = as.numeric(ANO))
+
+zmodels <- plyr::ddply(.data = disp.per.indice , plyr::.(PA, CATEG), function(x) {
+   t <- lm(x, formula = `Índice 100` ~ ANO)
+   data.frame("Durbin Watson" = durbinWatsonTest(model = t)[["dw"]],
+              "Durbin Watson - 5%" = if_else(
+                 durbinWatsonTest(model = t)[["p"]] < 0.05, "Com correlação", "Sem correlação"))})
+
+zmodels_1 <- disp.per.indice %>%
+   group_by(PA, CATEG) %>%
+   dplyr::summarise(KPSS = kpss.test(`Índice 100`)[1][[1]],
+                    `KPSS - 5%` = if_else(kpss.test(`Índice 100`, null="Level")[3][[1]] < 0.05, "Com tendência", "Sem tendência"))
+
+zDESC <- left_join(zmodels_1, zmodels, by = c("PA", "CATEG")) %>% 
+   mutate(KPSS = round(KPSS, 3),
+          Durbin.Watson = round(Durbin.Watson, 3)) %>% 
+   rename("Durbin Watson - 5%" = 6) %>% 
+   arrange(CATEG)
+
+# Tabela resumida ----
+
+table.attr = "style = \"color: black;\"", position = "c") %>%
+  kable_styling(font_size = 16, position = "c", full_width = TRUE) %>%
+   footnote(general = "Na análise de KPSS e Durbin Watson foram utilizadas variáveis LAG de dois período.")
+
+rm(zmodels, zmodels_1, zDESC)
+``` 
+
+
+
+<br>
+<br>
+
+
+```{r}
+# Mann-Kendall trend test (teste não-paramétrico - não assume normalidade de dados)
+
+## H0 = Não há tendência
+## Ha = Há tendência (podendo ser positiva ou negativa)
+## Se p-valor < nível de significância, rejeita-se H0
+
+## Fonte: https://www.statology.org/mann-kendall-trend-test-r/
+library(trend)
+
+# Converter para tssible----
+DISP_TS <- disp.per.indice %>% 
+   tsibble::as_tsibble(index = ANO, key = c(PA, CATEG)) %>% 
+   select(-3)
+
+
+# Calculando Mann-Kendall trend test
+cat <- unique(DISP_TS$PA)
+
+for(i in 1:length(cat)){
+  dados <- DISP_TS %>% 
+    filter(PA == cat[i])
+  
+  MK <- trend::mk.test(dados$`Índice 100`)
+  
+  print(cat[i])
+  print(MK)
+}
+
+# Sen's slope
+cat <- unique(DISP_TS$PA)
+
+for(i in 1:length(cat)){
+  dados <- DISP_TS %>% 
+    filter(PA == cat[i])
+  
+  sen <- trend::sens.slope(dados$`Índice 100`, conf.level = 0.95)
+  
+  print(cat[i])
+  print(sen)
+}
+
+## OBS: trend::sens.slope() já calcula o Mann-Kendall trend test
+```
+
+
