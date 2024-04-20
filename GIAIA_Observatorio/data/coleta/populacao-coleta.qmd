@@ -1,0 +1,221 @@
+---
+title: "População brasileira"
+subtitle: "Coleta de dados"
+author: "Gustavo Jun Yakushiji"
+date: last-modified
+date-format: "DD-MM-YYYY"
+lang: pt-BR
+format: 
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc_depth: 4
+    number-sections: true
+    page-layout: full
+---
+
+```{r}
+#| include: false
+
+options(scipen = 999)
+
+knitr::opts_chunk$set(
+   warning = FALSE,
+   echo = TRUE,
+   message = FALSE,
+   comment = "#>",
+   error = TRUE,
+   fig.align = "center",
+   fig.width = 12,
+   fig.height = 5
+)
+
+# Bibliotecas----
+library(sidrar)
+library(tidyverse)
+library(kableExtra)
+```
+
+# Descrições
+
+```{r}
+#| echo: false
+
+fontes <- tibble(
+   Sistema = "SIDRA - IBGE",
+   Pesquisa = c(
+      "Estimativas de população",
+      "Contagem da população",
+      rep("Censo demográfico", 2
+      )
+   ),
+   Fonte = "IBGE",
+   `Indexação-Referência da fonte` = c(6579, 793, 202, 9514),
+   `Descrição` = c(
+      "População residente estimada", 
+      "População residente", 
+      "População residente, por sexo e situação do domicílio",
+      "População residente, por sexo, idade e forma de declaração da idade"
+   ),
+   `Variáveis` = c(
+      "População residente estimada", 
+      "População residente de 2007", 
+      "População residente de 2000 e 2010",
+      "População residente de 2022"
+   ),
+   Unidade = "Pessoas",
+   `Unidade amostral` = "Brasil e Município",
+   `Intervalo temporal` = c(
+      "2001 a 2006, 2008 a 2009, 2011 a 2021",
+      "2007",
+      "2000 e 2010",
+      "2022"
+   ),
+   `Intervalo-Frequência` = "Anual")
+
+kbl(fontes, table.attr = "style = \"color: black;\"", position = "c")|>
+   kable_styling(font_size = 16, position = "c", full_width = FALSE)
+```
+
+# Coleta de dados
+
+## População estimada 2001 a 2006, 2008 a 2009, 2011 a 2021
+
+```{r}
+dicio_6579 <- info_sidra(6579)
+
+pop_estimada_br <- get_sidra(x = 6579, variable = 9324, 
+                             period = "all", geo = c("Brazil")) 
+
+pop_estimada_estados <- get_sidra(x = 6579, variable = 9324, 
+                                  period = "all", geo = c("State"))
+```
+
+```{r}
+# Juntando
+datas <- c("pop_estimada_br", "pop_estimada_estados")
+
+for (df in datas) {
+   assign(df,setNames(get(df),c("NT_C", "NT_D", "UN_C", "UN", "VALOR", "COD_MUN", "NOME_GEO", "ANO_C", "ANO", "VAR_C", "VAR")))
+}
+
+pop_estimada <- rbind(pop_estimada_br, pop_estimada_estados)
+
+rm(pop_estimada_br, pop_estimada_estados, dicio_6579)
+```
+
+## Contagem de população 2007
+
+```{r}
+dicio_793 <- info_sidra(793)
+
+pop_contagem_br <- get_sidra(x = 793, variable = 93, 
+                             period = "2007", geo = c("Brazil"))
+
+pop_contagem_estados <- get_sidra(x = 793, variable = 93, 
+                                  period = "2007", geo = c("State"))
+```
+
+```{r}
+# Juntando
+datas <- c("pop_contagem_br", "pop_contagem_estados")
+
+for (df in datas) {
+   assign(df,setNames(get(df),c("NT_C", "NT_D", "UN_C", "UN", "VALOR", "COD_MUN", "NOME_GEO", "ANO_C", "ANO", "VAR_C", "VAR")))
+}
+
+pop_contagem <- rbind(pop_contagem_br, pop_contagem_estados)
+
+rm(pop_contagem_br, pop_contagem_estados, dicio_793)
+```
+
+## Censo 2000, 2010 e 2022
+
+```{r}
+# 2000 e 2010
+dicio_202 <- info_sidra(202)
+
+pop_censo_br_00_10 <- get_sidra(x = 202, variable = 93, 
+                                period = c("2000", "2010"), 
+                                geo = c("Brazil"), 
+                                classific = "all", 
+                                category = list(0,0))
+
+pop_censo_estado_00_10 <- get_sidra(x = 202, variable = 93, 
+                                    period = c("2000", "2010"), 
+                                    geo = c("State"), 
+                                    classific = "all", 
+                                    category = list(0,0))
+
+# 2022
+dicio_9514 <- info_sidra(9514)
+
+pop_censo_br_22 <- get_sidra(x = 9514, variable = 93, 
+                             period = "2022", 
+                             geo = c("Brazil"), 
+                             classific = "all", 
+                             category = list(6794, 100362, 113635))
+
+pop_censo_estado_22 <- get_sidra(x = 9514, variable = 93, 
+                                 period = "2022", 
+                                 geo = c("State"), 
+                                 classific = "all", 
+                                 category = list(6794, 100362, 113635))
+```
+
+```{r}
+# Juntando 2000 e 2010
+datas <- c("pop_censo_br_00_10", "pop_censo_estado_00_10")
+
+for (df in datas) {
+   assign(df,setNames(get(df),c("NT_C", "NT_D", "UN_C", "UN", "VALOR", "COD_MUN", "NOME_GEO", "ANO_C", "ANO", "VAR_C", "VAR", "C1_C", "C1", "C2_C", "C2")))
+}
+
+pop_censo_00_10 <- rbind(pop_censo_br_00_10, pop_censo_estado_00_10) |> 
+   filter(C1 == "Total" & C2 == "Total")
+
+# Juntando 2022
+datas <- c("pop_censo_br_22", "pop_censo_estado_22")
+
+for (df in datas) {
+   assign(df,setNames(get(df),c("NT_C", "NT_D", "UN_C", "UN", "VALOR", "COD_MUN", "NOME_GEO", "ANO_C", "ANO", "VAR_C", "VAR", "C1_C", "C1", "C2_C", "C2", "C3_C", "C3")))
+}
+
+pop_censo_22 <- rbind(pop_censo_br_22, pop_censo_estado_22) |> 
+   filter(C1 == "Total" & C2 == "Total" & C3 == "Total") |> 
+   select(1:15)
+   
+pop_censo <- rbind(pop_censo_00_10, pop_censo_22)
+
+rm(pop_censo_br_00_10, pop_censo_estado_00_10, pop_censo_br_22, pop_censo_estado_22, pop_censo_00_10, pop_censo_22, dicio_202, dicio_9514, datas, df)
+```
+
+## Juntando todos os dados
+
+```{r}
+pop_juntas <- 
+   full_join(pop_censo, pop_contagem) |> 
+   full_join(pop_estimada)
+
+# Criando UF----
+estados <- tibble(
+   NOME_GEO = unique(pop_juntas$NOME_GEO),
+   UF = c(
+      "BR", "RO", "AC", "AM", "RR", "PA", "AP", "TO", "MA", "PI", "CE", "RN",
+      "PB", "PE", "AL", "SE", "BA", "MG", "ES", "RJ", "SP", "PR", "SC", "RS",
+      "MS", "MT", "GO", "DF"
+   )
+)
+
+populacao_final <- pop_juntas |> 
+   full_join(estados, by = "NOME_GEO") |> 
+   select(NT_C, NT_D, COD_MUN, NOME_GEO, UF, ANO, VAR, UN, VALOR) |> 
+   arrange(NT_C, NOME_GEO, ANO) |> 
+   janitor::clean_names()
+
+# Salvando bases de dados final----
+write_rds(populacao_final, "../data/populacao-00-22.rds")
+
+rm(pop_censo, pop_contagem, pop_estimada, pop_juntas, estados)
+```

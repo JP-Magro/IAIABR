@@ -1,0 +1,314 @@
+---
+title: "Preço ao Produtor"
+subtitle: "Coleta de dados"
+author: "Gustavo Jun Yakushiji"
+date: last-modified
+date-format: "DD-MM-YYYY"
+lang: pt-BR
+format: 
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc_depth: 4
+    number-sections: true
+    page-layout: full
+---
+
+```{r}
+#| include: false
+
+options(scipen = 999)
+
+knitr::opts_chunk$set(
+   warning = FALSE,
+   echo = TRUE,
+   message = FALSE,
+   comment = "#>",
+   error = TRUE,
+   fig.align = "center",
+   fig.width = 12,
+   fig.height = 5
+)
+
+# Bibliotecas
+library(sidrar)
+library(tidyverse)
+library(kableExtra)
+library(readxl)
+```
+
+# Descrições
+
+```{r}
+#| echo: false
+
+fonte <- tibble(
+   Sistema = c(rep("SIDRA - IBGE", 9), "CONAB"),
+   Pesquisa = c(
+      rep("Pesquisa Trimestral do Abate de Animais (PTAA)",3),
+      rep("Pesquisa Pecuária Municipal (PPM)",3),
+      "Pesquisa Trimestral do Leite (PTL)",
+      "Pesquisa de Ovos de Galinha (POG)",
+      "Pesquisa Agrícola Municipal (PAM)",
+      "Séries históricas das safras"
+   ),
+   Fonte = c(rep("IBGE", 9), "CONAB"),
+   `Indexação-Referência da fonte` = c(1092, 1093, 1094, 3939, 74, 94, 1086, 915, 5457, "Cana-de-açúcar - Indústria"),
+   `Descrição` = c(
+      "Número de informantes, Quantidade e Peso total das carcaças dos bovinos abatidos", 
+      "Número de informantes, Quantidade e Peso total das carcaças dos suínos abatidos", 
+      "Número de informantes, Quantidade e Peso total das carcaças dos frangos abatidos", 
+      "Efetivo dos rebanhos, por tipo de rebanho", 
+      "Produção de origem animal, por tipo de produto", 
+      "Vacas ordenhadas", 
+      "Número de informantes e Quantidade de leite cru, resfriado ou não, adquirido e industrializado, no mês e no trimestre, por tipo de inspeção",
+      "Número de informantes, Número de galinhas poedeiras e Quantidade de ovos produzidos, no mês e no trimestre",
+      "Área plantada, área colhida, quantidade produzida, rendimento e valor da produção",
+      "Série histórica de produção de açúcar"
+   ),
+   `Variáveis` = c(
+      "Número de informantes, Quantidade e Peso total das carcaças dos bovinos abatidos", 
+      "Número de informantes, Quantidade e Peso total das carcaças dos suínos abatidos",
+      "Número de informantes, Quantidade e Peso total das carcaças dos frangos abatidos",
+      "Efetivo dos rebanhos de bovinos, suínos e galináceos", 
+      "Produção e Valor da produção de Leite, Ovos de galinha, Ovos de codorna, Mel de abelha, Casulos do bicho-da-seda, Lã", 
+      "Vacas ordenhadas (Cabeças)",
+      "Número de informantes e Quantidade de leite cru, resfriado ou não, adquirido e industrializado",
+      "Número de informantes, Número de galinhas poedeiras e Quantidade de ovos produzidos",
+      "Área plantada ou destinada à colheita, área colhida, quantidade produzida, rendimento médio da produção e valor da produção das lavouras temporárias e permanentes",
+      "Quantidade produzida de açúcar"
+   ),
+   Unidade = c(
+      rep("Número de informantes - Unidades, Animais abatidos - Cabeças, Peso total das carcaças - Kg", 3), 
+      "Cabeças",
+      "Produção de origem animal (mil litros, mil dúzias, kg), Valor da produção - Mil reais", 
+      "Cabeças",
+      "Número de informantes - Unidades, Quantidade de leite - Mil litros",
+      "Número de informantes - Unidades, Número de galinhas poedeiras - Cabeças, Quantidade de ovos produzidos - Mil dúzias",
+      "Área plantada ou destinada à colheita - Ha, Área colhida - Ha, Quantidade produzida - Toneladas (Abacaxi e coco-da-baía - mil frutos), Rendimento médio da produção - Kg/Ha (Abacaxi e coco-da-baía - frutos/Ha), Valor da produção - Mil Reais",
+      "Mil Toneladas"
+   ),
+   `Unidade amostral` = c(rep("Estado", 3), rep("Município", 3), rep("Estado",2), "Município", "Estado"),
+   `Complementares` = "Cadeias Agropecuárias",
+   `Intervalo-Início` = c(rep(1997, 9), 2006),
+   `Intervalo-Fim` = c(rep(2023, 3), rep(2022, 3), 2023, 2023, 2022, 2023),
+   `Intervalo-Frequência` = c(rep("Trimestral", 3), rep("Anual", 3), rep("Trimestral", 2), rep("Anual", 2)))
+
+kbl(fonte, table.attr = "style = \"color: black;\"", position = "c") |>
+   kable_styling(font_size = 16, position = "c", full_width = FALSE)
+```
+
+# Funções de acesso
+
+```{r Funções de acesso}
+# Período (para pesquisas trimestrais)
+PERIOD_GEN <- function(AI, AF){
+   anos <- as.character(rep(AI:AF, times = 1, each = 4))
+   meses_0 <- str_pad(c(1:4), 2, pad = "0")
+   PERIOD <- paste0(anos, meses_0)
+   return(PERIOD)
+}
+
+# Recuperação das tabelas
+COLETA <- function(PR, L, V, GE, CLASSIFIC){
+  
+  if(is_null(CLASSIFIC)){TEST = "all"
+  }else{TEST = CLASSIFIC}
+  
+  PROD_STA <- NULL
+
+  for(P in PR){ 
+    PROD_UNS<-suppressMessages(get_sidra(x = L, 
+                                         variable = V, 
+                                         geo = GE, 
+                                         period = c(P),
+                                         classific = TEST,
+                                         digits = "max", 
+                                         format = 3, 
+                                         header = T)) 
+    PROD_STA <- bind_rows(PROD_STA, PROD_UNS)}
+  return(PROD_STA) 
+}
+```
+
+# Pesquisa Agrícola Municipal (PAM)
+
+```{r}
+# Culturas temporárias e permanentes
+## Parâmetros para coleta
+INFOS <- info_sidra(5457)
+
+PERIODO <- as.character(1995:2022)
+
+VARS_5457 <- INFOS[["variable"]] |> filter(cod %in% c(8331,216,214,112,215))
+VARS <- VARS_5457$cod
+
+rm(VARS_5457)
+
+## Coleta de dados
+pam_5457_bruto <- COLETA(PERIODO, 5457, VARS, "Brazil", CLASSIFIC = NULL)
+
+write_rds(pam_5457_bruto, "../coleta/data-raw/producao-raw/pam-95-22-bruto.rds")
+
+rm(PERIODO, VARS, INFOS)
+```
+
+# Pesquisa Pecuária Municipal (PPM)
+
+## Leite e Ovos
+
+```{r}
+# Leite e ovos  - Tabela 74
+# Parâmetros para coleta
+INFOS <- info_sidra(74)
+
+PERIODO <- as.character(1997:2022)
+
+VARS_74 <- INFOS[["variable"]] |> filter(cod %in% c(106,215))
+VARS <- VARS_74$cod
+
+## Recuperação da tabela
+ppm_74_bruto <- COLETA(PERIODO, 74, VARS, "Brazil", CLASSIFIC = NULL)
+
+write_rds(ppm_74_bruto, "../coleta/data-raw/producao-raw/ppm-74-leite-ovo-97-22-bruto.rds")
+
+rm(VARS_74)
+```
+
+## Leite
+
+```{r}
+# Leite - Tabela 94
+# Parâmetros para coleta
+INFOS <- info_sidra(94)
+
+PERIODO <- as.character(1997:2022)
+
+VARS_94 <- INFOS[["variable"]] |> filter(cod %in% c(107))
+VARS <- VARS_94$cod
+
+## Recuperação da tabela
+ppm_94_bruto <- COLETA(PERIODO, 94, VARS, "Brazil", CLASSIFIC = NULL)
+
+write_rds(ppm_94_bruto, "../coleta/data-raw/producao-raw/ppm-94-leite-97-22-bruto.rds")
+
+rm(VARS_94)
+```
+
+# Pesquisa Trimestral do Leite (PTL)
+
+```{r}
+# Leite - Tabela 1086
+# Parâmetros para coleta
+INFOS <- info_sidra(1086)
+
+PERIODO <- PERIOD_GEN(1997,2023)
+
+VARS_1086 <- INFOS[["variable"]] |> filter(cod %in% c(151,282,283))
+VARS <- VARS_1086$cod
+
+## Recuperação da tabela
+ptl_1086_bruto <- COLETA(PERIODO, 1086, VARS, "Brazil", CLASSIFIC = NULL)
+
+write_rds(ptl_1086_bruto, "../coleta/data-raw/producao-raw/ptl-1086-97-23-bruto.rds")
+
+rm(VARS_1086)
+```
+
+# Pesquisa de Ovos de Galinha (POG)
+
+```{r}
+# Ovo - Tabela 915
+# Parâmetros para coleta
+INFOS <- info_sidra(915)
+
+PERIODO <- PERIOD_GEN(1997,2023)
+
+VARS_915 <- INFOS[["variable"]] |> filter(cod %in% c(151,1988,29))
+VARS <- VARS_915$cod
+
+## Recuperação da tabela
+pog_915_bruto <- COLETA(PERIODO, 915, VARS, "Brazil", CLASSIFIC = NULL)
+
+write_rds(pog_915_bruto, "../coleta/data-raw/producao-raw/pog-915-97-23-bruto.rds")
+
+rm(VARS_915, INFOS, VARS, PERIODO)
+```
+
+# Pesquisa Trimestral do Abate de Animais (PTAA) - Carcaça
+
+```{r}
+# Bovinos, suínos e frangos - Período
+PERIODO <- PERIOD_GEN(1997,2023)
+```
+
+## Bovinos
+
+```{r}
+## Parâmetros para coleta
+INFOS <- info_sidra(1092)
+
+VARS_1092 <- INFOS[["variable"]] |> filter(cod %in% c(151, 284, 285))
+VARS <- VARS_1092$cod
+
+## Recuperação da tabela
+ptaa_1092_bruto <- COLETA(PERIODO, 1092, VARS, "Brazil", CLASSIFIC = NULL)
+
+write_rds(ptaa_1092_bruto, "../coleta/data-raw/producao-raw/ptaa-1092-bov-97-23-bruto.rds")
+
+rm(VARS_1092)
+```
+
+## Suínos
+
+```{r}
+## Parâmetros para coleta
+INFOS <- info_sidra(1093)
+
+VARS_1093 <- INFOS[["variable"]] |> filter(cod %in% c(151,284,285))
+VARS <- VARS_1093$cod
+
+## Recuperação da tabela
+ptaa_1093_bruto <- COLETA(PERIODO, 1093, VARS, "Brazil", CLASSIFIC = NULL)
+
+write_rds(ptaa_1093_bruto, "../coleta/data-raw/producao-raw/ptaa-1093-suino-97-23-bruto.rds")
+
+rm(VARS_1093)
+```
+
+## Frangos
+
+```{r}
+## Parâmetros para coleta
+INFOS <- info_sidra(1094)
+
+VARS_1094 <- INFOS[["variable"]] |> filter(cod %in% c(151,284,285))
+VARS <- VARS_1094$cod
+
+## Recuperação da tabela
+ptaa_1094_bruto <- COLETA(PERIODO, 1094, VARS, "Brazil", CLASSIFIC = NULL)
+
+write_rds(ptaa_1094_bruto, "../coleta/data-raw/producao-raw/ptaa-1094-frango-97-23-bruto.rds")
+
+rm(VARS_1094)
+```
+
+# Pesquisa Pecuária Municipal (PPM) - Efetivo dos rebanhos
+
+Bovinos, suínos e frangos
+
+```{r}
+## Parâmetros para coleta
+INFOS <- info_sidra(3939)
+PERIODO <- as.character(1997:2022)
+VARS_3939 <- INFOS[["variable"]] |> filter(cod %in% c(105))
+VARS <- VARS_3939$cod
+
+## Recuperação da tabela
+ppm_3939_bruto <- COLETA(PERIODO, 3939, VARS, "Brazil", CLASSIFIC = NULL)
+
+write_rds(ppm_3939_bruto, "../coleta/data-raw/producao-raw/ppm-3939-BovSuiFra-97-22_bruto.rds")
+
+rm(VARS_3939, INFOS, PERIODO, VARS)
+```

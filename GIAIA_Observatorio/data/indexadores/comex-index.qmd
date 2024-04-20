@@ -1,0 +1,71 @@
+---
+title: "Agrostat"
+subtitle: "Indexador Comex"
+author: "Gustavo Jun Yakushiji"
+date: last-modified
+date-format: "DD-MM-YYYY"
+lang: pt-BR
+format: 
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc_depth: 4
+    number-sections: true
+    page-layout: full
+---
+
+```{r}
+#| include: false
+
+options(scipen = 999)
+
+knitr::opts_chunk$set(
+   warning = FALSE,
+   echo = TRUE,
+   message = FALSE,
+   comment = "#>",
+   error = TRUE,
+   fig.align = "center",
+   fig.width = 12,
+   fig.height = 5
+)
+
+# Bibliotecas----
+library(ComexstatR)
+library(tidyverse)
+library(kableExtra)
+library(readxl)
+```
+
+# Agrostat
+
+O banco de dados do Comex Stat está classificado somente a nível de NCM. Para fins do trabalho, será utilizado como referência de indexação a classificação adotada pelo sistema da **Agrostat**, cuja organização se dá a nível de `Categoria`, `Setor(es)`, `Subsetor`, `Produto` e, por fim, o nível de menor agregação, a Nomenclatura Comum do Mercosul (`desc_ncm`). 
+
+O indexador da Agrostat possui apenas produtos agropecuários. Os produtos fora dessa classificação não serão considerados.  
+
+```{r}
+# Dicionário Agrostat
+dicio_agrostat <- read_excel("../indexadores/comex-index/dicio-agrostat.xlsx")
+
+# Coletando descrições NCM do Comex Stat para padronização de nomenclaturas
+dicio_api <- ComexstatR::pesquisar_ncm() |> 
+   rename("cod_ncm" = NCM,
+          "desc_ncm_api" = Descrição)
+
+# Cruzamento dos dicionários para gerar o indexador final padronizado
+dicio_agrostat_completo <- 
+   full_join(dicio_agrostat, dicio_api, by = c("cod_ncm")) |> 
+   filter(desc_ncm != is.na(desc_ncm)) |> 
+   select(-desc_ncm) |> 
+   mutate("categ" = str_to_sentence(Categoria),
+          "setor" = str_to_sentence(`Setor(es)`),
+          "subsetor" = str_to_sentence(Subsetor),
+          "prod" = str_to_sentence(Produto),
+          "desc_ncm" = str_to_sentence(desc_ncm_api), .keep="unused") |> 
+   select(categ:prod, cod_ncm, desc_ncm)
+
+write_rds(dicio_agrostat_completo, "../indexadores/agrostat-dicio.rds")
+
+rm(dicio_agrostat, dicio_api)
+```

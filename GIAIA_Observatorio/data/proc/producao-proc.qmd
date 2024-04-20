@@ -1,0 +1,563 @@
+---
+title: "Preço ao Produtor"
+subtitle: "Processamento de dados"
+author: "Gustavo Jun Yakushiji"
+date: last-modified
+date-format: "DD-MM-YYYY"
+lang: pt-BR
+format: 
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc_depth: 4
+    number-sections: true
+    page-layout: full
+---
+
+```{r}
+#| include: false
+
+options(scipen = 999)
+
+knitr::opts_chunk$set(
+   warning = FALSE,
+   echo = TRUE,
+   message = FALSE,
+   comment = "#>",
+   error = TRUE,
+   fig.align = "center",
+   fig.width = 12,
+   fig.height = 5
+)
+
+# Bibliotecas
+library(tidyverse)
+library(kableExtra)
+```
+
+# Produtos Agrícolas
+
+## Pesquisa Agrícola Municipal (PAM)
+
+```{r}
+# Importação
+pam_5457_bruto <- read_rds("../coleta/data-raw/producao-raw/pam-95-22-bruto.rds")
+```
+
+```{r}
+# Processamento
+pam_5457 <- pam_5457_bruto |>
+   rename(
+      "produto" = `Produto das lavouras temporárias e permanentes`,
+      "ano" = Ano,
+      "var" = Variável,
+      "un" = `Unidade de Medida`,
+      "valor" = Valor
+   ) |> 
+   select(produto, ano, var, un, valor) |> 
+   mutate(
+      produto = str_replace(produto, "\\*", ""),
+      un = if_else(
+         produto %in% c("Abacaxi", "Coco-da-baía") & var == "Quantidade produzida", "Mil Frutos", un),
+      un = if_else(
+         produto %in% c("Abacaxi", "Coco-da-baía") & var == "Rendimento médio da produção", "Frutos por Hectare", un)
+   ) |> 
+   filter(produto != "Total") |> 
+   arrange(produto, var, ano)
+
+rm(pam_5457_bruto)
+```
+
+## Produção de açúcar (CONAB)
+
+Coletado diretamente via site da CONAB.
+
+```{r}
+# Importação
+acucar_prod_bruto <- read_excel(
+   path = "../coleta/data-raw/producao-raw/conab/CanaSerieHistZ-ZIndustria.xls",
+   sheet = "Açúcar", 
+   col_names = c("LOCAL", 2006:2024), col_types = c( rep("text", 20)), skip = 6
+)
+```
+
+```{r}
+# Processamento
+acucar_prod <- acucar_prod_bruto |> 
+   filter(LOCAL == "BRASIL") |>
+   select(-LOCAL, -`2024`) |>
+   pivot_longer(cols = 1:18, names_to = "ano", values_to = "valor") |> 
+   mutate(
+      valor = as.numeric(valor) * 1000,
+      produto = "Açúcar",
+      var = "Quantidade produzida",
+      un = "Toneladas"
+   ) |> 
+   select(produto, ano, var, un, valor)
+
+rm(acucar_prod_bruto)
+```
+
+## Preços de açúcar (CEPEA)
+
+```{r}
+# Importação
+acucar_preco_bruto <- read_excel("../coleta/data-raw/producao-raw/cepea/Acucar_CEPEA.xlsx")
+```
+
+```{r}
+# Processamento
+acucar_preco <- acucar_preco_bruto |> 
+   select(PRODUTO, ANO, VAR, `Valor R$`, ID, ORIG, Notas) |> 
+   rename(
+      "produto" = PRODUTO,
+      "ano" = ANO,
+      "var" = VAR,
+      "valor" = `Valor R$`,
+      "id" = ID,
+      "origem" = ORIG,
+      "notas" = Notas
+   ) |> 
+   mutate(un = "Reais", .after = 3)
+
+rm(acucar_preco_bruto)
+```
+
+## Juntando pesquisas de produção agrícola
+
+```{r}
+prod_agricola <- 
+   rbind(pam_5457, acucar_prod) |> 
+   mutate(id = "Brasil", origem = "Agrícola", notas = NA) |> 
+   drop_na(valor) |> # Removendo produtos sem valor (NA)
+   rbind(acucar_preco) |> 
+   arrange(produto, var, ano)
+
+write_rds(prod_agricola, "../proc/data-raw/prod-agric-bind.rds")
+
+rm(pam_5457, acucar_prod, acucar_preco)
+```
+
+# Leite e Ovo
+
+## Dados trimestrais
+
+```{r}
+# Importação
+ptl_1086_bruto <- read_rds("../coleta/data-raw/producao-raw/ptl-1086-97-23-bruto.rds")
+
+pog_915_bruto <- read_rds("../coleta/data-raw/producao-raw/pog-915-97-23-bruto.rds")
+```
+
+```{r}
+# Processamento
+ptl_1086 <- ptl_1086_bruto |> 
+   filter(`Referência temporal` == "Total do trimestre" & `Tipo de inspeção` == "Total" ) |> 
+   select(-`Tipo de inspeção`) |> 
+   mutate(produto = "Leite")
+
+pog_915 <- pog_915_bruto |> 
+   filter(`Referência temporal` == "Total do trimestre") |> 
+   mutate(produto = "Ovos de galinha")
+```
+
+```{r}
+# Juntando
+prod_tri_bind <- rbind(ptl_1086, pog_915)
+
+rm(ptl_1086, pog_915, ptl_1086_bruto, pog_915_bruto)
+```
+
+```{r}
+# Processamento bases trimestrais juntas
+prod_tri <- prod_tri_bind |> 
+   separate(Trimestre, c("trimestre", "resto", "ano"), "\\ ", fill = "left") |>
+   group_by(produto, `Unidade de Medida`, Variável, ano) |>
+   summarise(
+      valor_anual = sum(Valor),
+      valor_med = round(mean(Valor), digits = -0.1))|>
+   mutate(
+      valor = case_when(
+         Variável == "Número de informantes" ~ as.numeric(valor_med),
+         TRUE ~ as.numeric(valor_anual)
+      )
+   )|>
+   select(produto, ano, Variável, `Unidade de Medida`, valor) |> 
+   rename("var" = Variável, "un" = `Unidade de Medida`)
+
+rm(prod_tri_bind)
+```
+
+## Dados anuais
+
+```{r}
+# Importação
+ppm_74_bruto <- read_rds("../coleta/data-raw/producao-raw/ppm-74-leite-ovo-97-22-bruto.rds")
+
+ppm_94_bruto <- read_rds("../coleta/data-raw/producao-raw/ppm-94-leite-97-22-bruto.rds")
+```
+
+```{r}
+# Processamento
+ppm_74 <- ppm_74_bruto |> 
+   rename("produto" = `Tipo de produto de origem animal`) |> 
+   filter(produto %in% c("Leite", "Ovos de galinha"))
+
+ppm_94 <- ppm_94_bruto |> 
+   mutate(produto = "Leite")
+```
+
+```{r}
+# Juntando
+prod_anual_bind <- rbind(ppm_74, ppm_94)
+
+rm(ppm_74, ppm_94, ppm_74_bruto, ppm_94_bruto)
+```
+
+```{r}
+# Processando bases anuais juntas
+prod_anual <- prod_anual_bind |> 
+   select(produto, Ano, Variável, `Unidade de Medida`, Valor) |> 
+   rename(
+      "un" = `Unidade de Medida`,
+      "ano" = Ano,
+      "var" = Variável,
+      "valor" = Valor
+   )
+
+rm(prod_anual_bind)
+```
+
+## Juntando bases anuais e trimestrais
+
+```{r}
+prod_ovo_leite <- rbind(prod_anual, prod_tri) |> 
+   mutate(id = "Brasil", origem = "Pecuária", notas = NA) |> 
+   arrange(produto, var, ano)
+
+write_rds(prod_ovo_leite, "../proc/data-raw/prod-ovo-leite-bind.rds")
+
+rm(prod_anual, prod_tri)
+```
+
+# Bovinos, Suínos e Frangos
+
+## Produção
+
+```{r}
+# Importação
+ptaa_1092_bruto <- read_rds("../coleta/data-raw/producao-raw/ptaa-1092-bov-97-23-bruto.rds")
+
+ptaa_1093_bruto <- read_rds("../coleta/data-raw/producao-raw/ptaa-1093-suino-97-23-bruto.rds")
+
+ptaa_1094_bruto <- read_rds("../coleta/data-raw/producao-raw/ptaa-1094-frango-97-23-bruto.rds")
+```
+
+```{r}
+# Processamento
+ptaa_1092 <- ptaa_1092_bruto |> 
+   filter(`Tipo de rebanho bovino` == "Total") |> 
+   select(-`Tipo de rebanho bovino`) |> 
+   mutate(produto = "Carcaça bovino")
+
+ptaa_1093 <- ptaa_1093_bruto |> mutate(produto = "Carcaça suíno")
+
+ptaa_1094 <- ptaa_1094_bruto |> mutate(produto = "Carcaça frango")
+```
+
+```{r}
+# Juntando
+prod_pec_bind <- rbind(ptaa_1092, ptaa_1093, ptaa_1094)
+
+rm(ptaa_1092_bruto, ptaa_1093_bruto, ptaa_1094_bruto, ptaa_1092, ptaa_1093, ptaa_1094)
+```
+
+```{r}
+# Manipulação bases juntas
+prod_pec_mod <- prod_pec_bind |> 
+   filter(`Referência temporal` == "Total do trimestre" & 
+             `Tipo de inspeção` == "Total") |>
+   separate(Trimestre, c("trimestre", "resto", "ano"), "\\ ", fill = "left")|>
+   group_by(produto, `Unidade de Medida`, Variável, ano)|>
+   summarise(
+      valor_anual = sum(Valor),
+      valor_med = round(mean(Valor), digits = -0.1)
+   )|>
+   mutate(valor = case_when(
+      Variável == "Número de informantes" ~ as.numeric(valor_med),
+      TRUE ~ as.numeric(valor_anual)
+   )
+   )|>
+   select(produto, ano, Variável, `Unidade de Medida`, valor) |> 
+   rename("un" = `Unidade de Medida`, "var" = Variável)
+
+rm(prod_pec_bind)
+```
+
+## Rebanho
+
+```{r}
+# Importação
+ppm_3939_bruto <- read_rds("../coleta/data-raw/producao-raw/ppm-3939-BovSuiFra-97-22_bruto.rds")
+```
+
+```{r}
+# Processamento
+prod_pec_rebanho <- ppm_3939_bruto |> 
+   filter(`Tipo de rebanho` %in% c("Bovino", "Suíno - total", "Galináceos - total")) |>
+   mutate(`Tipo de rebanho` = case_when(
+      `Tipo de rebanho` == "Suíno - total" ~ "Carcaça suíno",
+      `Tipo de rebanho` == "Galináceos - total" ~ "Carcaça frango",
+      TRUE ~ "Carcaça bovino")
+   )|>
+   select(`Tipo de rebanho`, Ano, Variável, `Unidade de Medida`, Valor) |> 
+   rename(
+      "ano" = Ano,
+      "un" = `Unidade de Medida`,
+      "var" = Variável,
+      "valor" = Valor,
+      "produto" = `Tipo de rebanho`
+   )
+
+rm(ppm_3939_bruto)
+```
+
+## Preços - CEPEA/ESALQ
+
+Coletado diretamente do site do CEPEA. <https://www.cepea.esalq.usp.br/br/consultas-ao-banco-de-dados-do-site.aspx>
+
+```{r}
+# Importação
+## Bovinos
+PREC_BOV_B3 <- 
+   read_excel("../coleta/data-raw/producao-raw/cepea/BoiGordo_CEPEA_B3.xlsx", skip = 3) |> 
+   mutate(id = "CEPEA Boi gordo B3 - SP")
+
+PREC_BOV_SP <- read_excel("../coleta/data-raw/producao-raw/cepea/BoiGordo_CEPEA_SP.xlsx", skip = 3) |> 
+   mutate(id = "CEPEA Boi gordo - SP")
+
+## Frangos
+PREC_FRA_CONG_SP <- read_excel("../coleta/data-raw/producao-raw/cepea/FrangoCongelado_CEPEA_SP.xlsx", skip = 3) |> 
+   mutate(id = "CEPEA Frango congelado - SP")
+
+PREC_FRA_RESF_SP <- read_excel("../coleta/data-raw/producao-raw/cepea/FrangoResfriado_CEPEA_SP.xlsx", skip = 3) |> 
+   mutate(id = "CEPEA Frango resfriado - SP")
+
+## Suínos
+PREC_SUINO_ESP <- read_excel("../coleta/data-raw/producao-raw/cepea/SuinoCarcaca_CEPEA.xlsx", skip = 3) |> 
+   mutate(id = "CEPEA Suíno - Especial")
+
+PREC_SUINO_MG <- read_excel("../coleta/data-raw/producao-raw/cepea/SuinoVivo_CEPEA_MG.xlsx", skip = 3) |> 
+   mutate(id = "CEPEA Suíno - MG")
+
+PREC_SUINO_PR <- read_excel("../coleta/data-raw/producao-raw/cepea/SuinoVivo_CEPEA_PR.xlsx", skip = 3) |> 
+   mutate(id = "CEPEA Suíno - PR")
+
+PREC_SUINO_RS <- read_excel("../coleta/data-raw/producao-raw/cepea/SuinoVivo_CEPEA_RS.xlsx", skip = 3) |> 
+   mutate(id = "CEPEA Suíno - RS")
+
+PREC_SUINO_SC <- read_excel("../coleta/data-raw/producao-raw/cepea/SuinoVivo_CEPEA_SC.xlsx", skip = 3) |> 
+   mutate(id = "CEPEA Suíno - SC")
+
+PREC_SUINO_SP <- read_excel("../coleta/data-raw/producao-raw/cepea/SuinoVivo_CEPEA_SP.xlsx", skip = 3) |> 
+   mutate(id = "CEPEA Suíno - SP")
+```
+
+```{r}
+# Juntando bases de dados
+## Bovinos
+preco_bov_bind <- rbind(PREC_BOV_B3, PREC_BOV_SP) |> 
+   mutate(produto = "Carcaça bovino", un = "Reais por arroba")
+
+## Frangos
+preco_frango_bind <- rbind(PREC_FRA_CONG_SP, PREC_FRA_RESF_SP) |> 
+   mutate(produto = "Carcaça frango", un = "Reais por kg")
+
+## Suínos
+PREC_SUINO_ESP <- PREC_SUINO_ESP |> rename("À vista R$" = `Média`)
+
+preco_suino_bind <- rbind(PREC_SUINO_ESP, PREC_SUINO_MG, PREC_SUINO_PR, PREC_SUINO_RS, PREC_SUINO_SC, PREC_SUINO_SP) |> 
+   mutate(produto = "Carcaça suíno", un = "Reais por kg") |> 
+   rename("Valor" = `À vista R$`)
+
+## Todos os produtos
+preco_BovSuiFra <- rbind(preco_bov_bind, preco_frango_bind, preco_suino_bind) |>
+   mutate(var = "Preço ao produtor")
+
+rm(PREC_BOV_B3, PREC_BOV_SP, PREC_FRA_CONG_SP, PREC_FRA_RESF_SP, PREC_SUINO_ESP, PREC_SUINO_MG, PREC_SUINO_PR, PREC_SUINO_RS, PREC_SUINO_SC, PREC_SUINO_SP, preco_bov_bind, preco_frango_bind, preco_suino_bind)
+```
+
+```{r}
+# Processamento e manipulação dados juntos
+preco_BovSuiFra_mod <- preco_BovSuiFra |> 
+   mutate(
+      date = my(Data), .keep = "unused",
+      ano = year(date) |> as.character(),
+      valor = str_replace(Valor, "\\,", ".") |> as.numeric()
+   ) |> 
+   group_by(id, produto, un, var, ano) |> 
+   summarise(valor = mean(valor)) |> 
+   mutate(
+      valor = if_else(
+         produto == "Carcaça bovino", 
+         valor / 15, valor #convertendo R$/@ para R$/kg - boi
+      ), 
+      un = "Reais por kg"
+   ) |> 
+   select(id, produto, ano, var, un, valor)
+
+rm(preco_BovSuiFra)
+```
+
+## Juntando produção e preço pecuário
+
+```{r}
+prod_pec <- rbind(prod_pec_mod, prod_pec_rebanho) |> 
+   mutate(id = "Brasil") |> 
+   arrange(produto, var, ano)
+
+prod_pec_bind <- rbind(prod_pec, preco_BovSuiFra_mod) |> 
+   mutate(origem = "Pecuária", notas = NA)
+
+write_rds(prod_pec_bind, "../proc/data-raw/prod-pec-bind.rds")
+
+rm(prod_pec_mod, prod_pec_rebanho, preco_BovSuiFra_mod, prod_pec)
+```
+
+# União dos dados Agrícolas e Pecuárias
+
+```{r}
+# Importação
+prod_agricola <- read_rds("../proc/data-raw/prod-agric-bind.rds")
+
+prod_ovo_leite <- read_rds("../proc/data-raw/prod-ovo-leite-bind.rds")
+
+prod_pec_bind <- read_rds("../proc/data-raw/prod-pec-bind.rds")
+```
+
+```{r}
+# Juntando
+prod_agropec_bind <- rbind(prod_agricola, prod_ovo_leite, prod_pec_bind)
+
+rm(prod_agricola, prod_ovo_leite, prod_pec_bind)
+```
+
+# Manipulações adicionais
+
+## Unidades de medidas
+
+```{r}
+prod_agropec_mod1 <- prod_agropec_bind |> 
+   mutate(
+      valor = case_when(
+         un == "Quilogramas" ~ round((valor / 1000), 3),
+         un == "Mil Frutos" ~ round((valor * 1000), 3),
+         TRUE ~ round(valor, 3)
+      ),
+      un = case_when(
+         un == "Quilogramas" ~ "Toneladas",
+         un == "Cabeças" ~ "Unidades",
+         un == "Mil Frutos" ~ "Frutos",
+         TRUE ~ un
+      ),
+      categ = case_when(
+         un == "Hectares" ~ "Área",
+         un == "Frutos" | un == "Toneladas" | un == "Mil litros" | un == "Mil dúzias" ~ "Quantidade",
+         un == "Quilogramas por Hectare" | un == "Frutos por Hectare" ~ "Produtividade",
+         un == "Mil Reais" ~ "Valor",
+         un == "Reais" ~ "Valor",
+         un == "Unidades" ~ "Unidades",
+         un == "Reais por kg" ~ "Preço ao produtor"
+      ), .before = 5
+   )
+```
+
+### Leite e Ovo de galinha
+
+Como os dados de produção dos produtos Leite e Ovo de galinha são registrados em Mil litros e Mil dúzias , respectivamente, se faz necessário converter suas unidades para a mesma base de análise, em toneladas.  
+
+**Leite**
+
+$$\text{Leite }_{(Toneladas)} = \text{Produção total }_\text{(mil litros)} \times \text{Densidade leite }_\text{(kg/L)}$$
+
+Densidade do leite determinada em 1,031 kg/L, de acordo com Brasil (2013).  
+
+**Ovos de galinha**
+
+$$\text{Ovo de galinha }_{(Toneladas)} = \frac{{\text{Produção total }_\text{(mil dúzias)} \times \text{Peso médio da dúzia de ovos }_\text{(g/dúzia)}}}{1.000}$$
+
+Peso médio da dúzia de ovos determinado em 630 g/dúzia, de acordo com Brasil (1965).  
+
+```{r}
+prod_agropec_mod2 <- prod_agropec_mod1 |> 
+   mutate(
+      valor = case_when(
+         un == "Mil litros" & produto == "Leite" ~ ((valor * 1.031)),
+         un == "Mil dúzias" & produto == "Ovos de galinha" ~ ((valor * 630) / 1000),
+         TRUE ~ valor
+      ),
+      un = case_when(
+         un == "Mil litros" ~ "Toneladas",
+         un == "Mil dúzias" ~ "Toneladas",
+         TRUE ~ un)
+   )
+```
+
+## Cadeias
+
+```{r}
+# Importação indexador
+dicio_cadeias <- read_excel("../indexadores/producao-index/dicio-cadeias-producao.xlsx")
+```
+
+```{r}
+prod_agropec <- full_join(prod_agropec_mod2, dicio_cadeias, by = "produto") |> 
+   relocate(cadeia)
+```
+
+# Salvando dados completos
+
+```{r}
+write_rds(prod_agropec, "../producao-95-23-agropec-completo.rds")
+
+rm(prod_agropec_bind, prod_agropec_mod1, prod_agropec_mod2, dicio_cadeias)
+```
+
+# Referências {.unnumbered}
+
+BRASIL. Decreto 56.585, de 20 de julho de 1965 - Aprova as novas especificações para a classificação e fiscalização do ovo. Coordenadoria de Defesa Agropecuária do Estado de São Paulo – CDAESP, 1965. Disponível em: https://www.defesa.agricultura.sp.gov.br/legislacoes/ decreto-56585-de-20-07-1965,359.html#:~:text=Tipo%201%20(extra)%20%2D%20com,e% 20sessenta.  
+
+BRASIL. MAPA: Métodos da área POA/IQA. Determinação da densidade em leite fluido com uso do termolactodensímetro. Ministério da Agricultura, Pecuária e Abastecimento – MAPA, 2013. Disponível em: https://www.gov.br/agricultura/pt-br/assuntos/laboratorios/ credenciamento-e-laboratorios-credenciados/legislacao-metodos-credenciados/arquivos-metodos-da-area-poa-iqa/met-poa-09-02-densidade-em-leite-fluido.pdf.
+
+# Abortado ----------------------------------------------
+
+## Valor total da produção
+
+Variável calculada para bovinos, suínos e frangos.  
+
+$$\text{Valor total da produção}_{\text{(mil RS)}} = \frac{\text{Peso das carcaças}_\text{(Ton.)} * \text{Preço ao produtor}_\text{(RS/Ton.)}}{1000}$$
+
+**Questão: qual pesquisa de preço ao produtor do CEPEA utilizar.**
+
+## Produtividade
+
+Variável calculada para ovos de galinha e leite.  
+
+$$Produtividade_{(kg/unid)} = \frac{\text{Total produzido}_{(Ton.)}}{\text{Total anual de unidades produtivas}_{(unid)}}*1000$$
+
+```{r}
+# Produtiv <- PROD_AGROPEC_PROC_1 |> 
+#    filter(PRODUTO %in% c("Leite", "Ovos de galinha"),
+#           TIPO %in% c("Quantidade", "Unidades")) |> 
+#    select(-VAR, -UN) |> 
+#    pivot_wider(names_from = TIPO, values_from = VALOR) |> 
+#    mutate(`Rendimento médio da produção` = (Quantidade/Unidades)*1000) |> 
+#    drop_na(`Rendimento médio da produção`) |> 
+#    select(1:4,7) |> 
+#    pivot_longer(cols = 5, names_to = "VAR", values_to = "VALOR") |> 
+#    mutate(UN = "Quilograma por Unidade",
+#           TIPO = "Produtividade")
+```
+
+**Questão: produtividade está baixa para ovos. Pq?**

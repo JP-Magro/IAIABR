@@ -1,0 +1,143 @@
+---
+title: "Comércio Exterior - ComexStat"
+subtitle: "Coleta de dados"
+author: "Gustavo Jun Yakushiji"
+date: last-modified
+date-format: "DD-MM-YYYY"
+lang: pt-BR
+format: 
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc_depth: 4
+    number-sections: true
+    page-layout: full
+---
+
+```{r}
+#| include: false
+
+options(scipen = 999)
+
+knitr::opts_chunk$set(
+   warning = FALSE,
+   echo = TRUE,
+   message = FALSE,
+   comment = "#>",
+   error = TRUE,
+   fig.align = "center",
+   fig.width = 12,
+   fig.height = 5
+)
+
+# Bibliotecas----
+library(ComexstatR)
+library(tidyverse)
+library(kableExtra)
+```
+
+# Descrições
+
+```{r}
+#| echo: false
+
+fontes <- tibble(
+   Sistema = "Comex Stat",
+   Pesquisa = "Exportações e importações - Geral",
+   Fonte = "SISCOMEX",
+   `Indexação-Referência da fonte` = c("Exportação", "Importação"),
+   `Descrição` = "Base de dados detalhada por ano, código NCM, descrição NCM, valor dólar FOB (USS), quilograma líquido exportado e quantidade estatística",
+   `Variáveis` = "Valor FOB (US$), Quilograma líquido, Quantidade estatística",
+   Unidade = "Valor - US$, Quantidade - kg líquido, Valor estatístico - Adimensional",
+   `Unidade amostral` = "Nacional",
+   `Complementares` = "Cadeias Agropecuárias, Classificação NOVA",
+   `Intervalo temporal` = "1997 - 2023",
+   `Frequência temporal` = "Anual"
+)
+
+kbl(fontes, table.attr = "style = \"color: black;\"", position = "c")|>
+   kable_styling(font_size = 16, position = "c", full_width = FALSE)
+```
+
+# Coleta de dados
+
+## Função de coleta
+
+```{r}
+coleta <- function(anos, DetMes, OP){
+  
+  comex_sta <- NULL
+  
+  for(P in anos){ 
+     comex_uns <- suppressMessages(
+        pesquisar_comex_stat(ano_inicial = P,
+                             ano_final = P,
+                             mes_inicial = 1,
+                             mes_final = 12,
+                             detalha_mes = DetMes,
+                             tipo_op = OP,
+                             filtros = "ncm",
+                             tipo_ord = "val",
+                             filtros_esp = c(),
+                             detalhamentos = "ncm",
+                             faixa = F,
+                             valor_FOB = T,
+                             valor_kg = T,
+                             qtd_est = T))
+     
+     comex_sta <- bind_rows(comex_sta, comex_uns)}
+  
+  return(comex_sta) 
+}
+```
+
+## Coleta das exportações nacionais (1997 a 2023)
+
+```{r}
+exp_bruto <- coleta(anos = 1997:2023, DetMes = F, OP = "exp")
+
+exp_bruto <- exp_bruto |> 
+   mutate(tipo_op = "Exportação")
+
+write_rds(exp_bruto, "../data/coleta/data-raw/comex-raw/comex-exp-97-23_bruto.rds")
+```
+
+## Coleta das importações nacionais (1997 a 2023)
+
+```{r}
+imp_bruto <- coleta(anos = 1997:2023, DetMes = F, OP = "imp")
+
+imp_bruto <- imp_bruto |> 
+   mutate(tipo_op = "Importação")
+
+write_rds(imp_bruto, "../data/coleta/data-raw/comex-raw/comex-imp-97-23-bruto.rds")
+```
+
+## Juntando Exportação e Importação
+
+```{r}
+exp_bruto <- read_rds("../data/coleta/data-raw/comex-raw/comex-exp-97-23-bruto.rds")
+
+imp_bruto <- read_rds("../data/coleta/data-raw/comex-raw/comex-imp-97-23-bruto.rds")
+
+exp_imp_bruto <- rbind(exp_bruto, imp_bruto) |> 
+   rename(
+      "ano" = coAno,
+      "cod_ncm" = coNcm,
+      "desc_ncm" = noNcmpt,
+      "valor_dolar" = vlFob,
+      "kg_liq" = kgLiquido,
+      "qtd_est" = qtEstat
+   ) |> 
+   mutate(
+      ano = factor(ano, levels = c(1997:2023)),
+      desc_ncm = str_to_sentence(desc_ncm)
+   ) |> 
+   arrange(tipo_op, ano) |> 
+   select(7, 1:6)
+
+write_rds(exp_imp_bruto, "./data-raw/comex-raw/comex-exp-imp-97-23-bruto.rds")
+
+rm(exp_bruto, imp_bruto, coleta)
+```

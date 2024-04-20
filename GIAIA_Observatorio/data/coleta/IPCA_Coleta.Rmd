@@ -1,0 +1,1237 @@
+---
+title: "Coleta de dados - IPCA/IBGE"
+author: "Gustavo Jun Yakushiji e João Pedro Simões Magro"
+date: "Última atualização em `r format(Sys.time(), '%d de %B de %Y')`"
+output:
+  html_document: default
+---
+
+<br> <br>
+
+```{r setup, include=TRUE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      results = 'show',
+                      error=FALSE,
+                      warning=FALSE,
+                      message=FALSE,
+                      eval = FALSE)
+
+
+# Bibliotecas----
+library(tidyverse)
+library(sidrar)
+library(kableExtra)
+library(readxl)
+```
+
+# IPCA - Coleta e processamento de dados {.unnumbered}
+
+<br>
+
+```{r, echo=FALSE}
+tibble(
+   Sistema = "SIDRA - IBGE",
+   Pesquisa = "Índice Nacional de Preços ao Consumidor Amplo (IPCA)",
+   Fonte = "IBGE",
+   `Indexação-Referência da fonte` = c("655, 657, 656", 2938, 1419, 7060),
+   `Descrição` = "Variação mensal, acumulada no ano e peso mensal, para o índice geral, grupos, subgrupos, itens e subitens de produtos e serviços",
+   `Variáveis` = "Variação mensal, Variação acumulada no ano, Peso mensal",
+   Unidade = "%",
+   `Unidade amostral` = "Município",
+   `Complementares` = "Estrutura de ponderação, Cadeias Agropecuárias, Classificação NOVA",
+   `Intervalo-Início` = c("Ago 1999", "Jul 2006", "Jan 2012", "Jan 2020"),
+   `Intervalo-Fim` = c("Jun 2006", "Dez 2011", "Dez 2019", "Dez 2022"),
+   `Intervalo-Frequência` = "Mensal"
+)  |>  
+   kbl(table.attr = "style = \"color: black;\"", position = "c")|>
+  kable_styling(font_size = 16, position = "c", full_width = FALSE)
+```
+
+<br> <br>
+
+# Dicionários
+
+## Criando dicionários
+
+Observação: Agregação do IPCA de 1989 a 1999 era diferente (possuia, até então, apenas 7 grupos e diferentes agregações em subgrupo e itens); foi excluído da estrutura de coleta devido a dificuldade de comparação/junção com os subsequentes IPCAs (após 1999).  
+
+```{r Criando dicionários}
+# # 1989-1990----
+# DICIO_1692 <- info_sidra(1692)
+# DICIO_1692_IPCA_1989_1990 <- 
+#    tibble("COD" = DICIO_1692 |> pluck(4,1,1) |> as.numeric(),
+#           "DESC" = DICIO_1692 |> pluck(4,1,2) |> as.character()) |> 
+#    separate(DESC, c("COD_REF", "ITEM"), "\\.", fill="left") |>
+#    mutate(COD_REF = as.numeric(COD_REF)) |>
+#    mutate(COD_REF = if_else(COD == 2640.0, 0.0, COD_REF))
+# 
+# ## Selecionando apenas produtos alimentícios
+# DICIO_1692_IPCA_1989_1990_ALM <- DICIO_1692_IPCA_1989_1990 |> 
+#    slice(1:233)
+# 
+# 
+# 
+# # 1991-1999----
+# DICIO_58 <- info_sidra(58)
+# DICIO_58_IPCA_1991_1999 <- 
+#    tibble("COD" = DICIO_58 |> pluck(4,1,1) |> as.numeric(),
+#           "DESC" = DICIO_58 |> pluck(4,1,2) |> as.character()) |> 
+#    separate(DESC, c("COD_REF", "ITEM"), "\\.", fill="left") |>
+#    mutate(COD_REF = as.numeric(COD_REF)) |>
+#    mutate(COD_REF = if_else(COD == 2640.0, 0.0, COD_REF))
+# 
+# ## Selecionando apenas produtos alimentícios
+# DICIO_58_IPCA_1991_1999_ALM <- DICIO_58_IPCA_1991_1999 |> 
+#    slice(1:192)
+
+# 1999-2006----
+DICIO_657 <- info_sidra(657)
+DICIO_656 <- info_sidra(656)
+
+DICIO_655 <- info_sidra(655)
+DICIO_655_IPCA_1999_2006 <- 
+   tibble("COD" = DICIO_655 |> pluck(4,1,1) |> as.numeric(),
+          "DESC" = DICIO_655 |> pluck(4,1,2) |> as.character()) |> 
+   separate(DESC, c("COD_REF", "ITEM"), "\\.", fill="left") |>
+   mutate(COD_REF = as.numeric(COD_REF)) |>
+   mutate(COD_REF = if_else(COD == 7169.0, 0.0, COD_REF))
+
+## Selecionando apenas produtos alimentícios
+DICIO_655_IPCA_1999_2006_ALM <- DICIO_655_IPCA_1999_2006 |> 
+   slice(1:257)
+
+# 2006-2011----
+DICIO_2938 <- info_sidra(2938)
+DICIO_2938_IPCA_2k6_2k11 <- 
+   tibble("COD" = DICIO_2938 |> pluck(4,1,1) |> as.numeric(),
+          "DESC" = DICIO_2938 |> pluck(4,1,2) |> as.character()) |> 
+   separate(DESC, c("COD_REF", "ITEM"), "\\.", fill="left") |>
+   mutate(COD_REF = as.numeric(COD_REF)) |>
+   mutate(COD_REF = if_else(COD == 7169.0, 0.0, COD_REF))
+
+## Selecionando apenas produtos alimentícios
+DICIO_2938_IPCA_2k6_2k11_ALM <- DICIO_2938_IPCA_2k6_2k11 |> 
+   slice(1:180)
+
+# 2012-2019----
+DICIO_1419 <- info_sidra(1419)
+DICIO_1419_IPCA_2K12_2K19 <- 
+   tibble(
+      "COD" = DICIO_1419 |> pluck(4,1,1) |> as.numeric(),
+      "DESC" = DICIO_1419 |> pluck(4,1,2) |> as.character()) |> 
+   separate(DESC, c("COD_REF", "ITEM"), "\\.", fill = "left")|>
+   mutate(COD_REF = as.numeric(COD_REF))|>
+   mutate(COD_REF = if_else(COD == 7169.0, 0.0, COD_REF))
+
+## Selecionando apenas produtos alimentícios
+DICIO_1419_IPCA_2K12_2K19_ALM <- DICIO_1419_IPCA_2K12_2K19 |> 
+   slice(1:191)
+
+# 2020 em diante----
+DICIO_7060 <- info_sidra(7060)
+DICIO_7060_IPCA_2K20_2K21 <- 
+   tibble(
+      "COD" = DICIO_7060 |> pluck(4,1,1) |> as.numeric(),
+      "DESC" = DICIO_7060 |> pluck(4,1,2) |>  as.character()) |> 
+   separate(DESC, c("COD_REF", "ITEM"), "\\.", fill = "left")|>
+   mutate(COD_REF = as.numeric(COD_REF))|>
+   mutate(COD_REF = if_else(COD == 7169.0,0.0, COD_REF))
+
+## Selecionando apenas produtos alimentícios
+DICIO_7060_IPCA_2K20_2K21_ALM <- DICIO_7060_IPCA_2K20_2K21 |> 
+   slice(1:189)
+```
+
+## Juntando todos os dicionários de produtos alimentícios
+
+```{r Juntando dicionários}
+DICIO_F_1_ALM <- 
+   full_join(DICIO_655_IPCA_1999_2006_ALM, DICIO_2938_IPCA_2k6_2k11_ALM,
+             by=c("COD","COD_REF","ITEM")) |> 
+   full_join(DICIO_1419_IPCA_2K12_2K19_ALM,
+             by=c("COD","COD_REF","ITEM")) |> 
+   full_join(DICIO_7060_IPCA_2K20_2K21_ALM,
+             by=c("COD","COD_REF","ITEM"))
+
+rm(DICIO_655_IPCA_1999_2006_ALM,DICIO_2938_IPCA_2k6_2k11_ALM, DICIO_1419_IPCA_2K12_2K19_ALM, DICIO_7060_IPCA_2K20_2K21_ALM, DICIO_1419_IPCA_2K12_2K19, DICIO_2938_IPCA_2k6_2k11, DICIO_655_IPCA_1999_2006, DICIO_7060_IPCA_2K20_2K21)
+```
+
+## Conferindo entradas repetidas do dicionário de produtos alimentícios
+
+```{r Conferindo entradas repetidas}
+zDICIO_COD_REP <- DICIO_F_1_ALM|>
+   group_by(COD)|>
+   filter(n()>1)
+
+zDICIO_COD_REF_REP <- DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(n()>1)
+
+zDICIO_ITEM_REP <- DICIO_F_1_ALM|>
+   group_by(ITEM)|>
+   filter(n()>1)
+
+rm(zDICIO_COD_REP,zDICIO_ITEM_REP)
+   
+```
+
+Em `zDICIO_COD_REP` não há repetições; em `zDICIO_ITEM_REP`, nenhuma repetição precisou ser ajustada, pois são de subgrupos distintos (no domicílio e fora do domicílio); as correções necessárias serão realizadas apenas em `zDICIO_COD_REF_REP`.  
+
+
+## Corrigindo entradas repetidas do dicionário de produtos alimentícios
+
+Os dados foram organizados mediante a coluna onde se observou a repetição e então, um a um os dados foram sendo substituiídos. Ademais, foram convertidos os códigos e nomenclaturas de alguns produtos que passaram por alterações durante a mudança de POFs, sendo adotados os mais atuais (POF 17-18).  
+
+```{r Corrigindo entradas repetidas}
+#Feijão carioca - Rajado----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM, c("carioca")))
+
+ITEM_CORR_BULK<-tibble(
+   COD = c(7180,12222),
+   COD_SUB = c(rep(12222,2)),
+   COD_REF = c(rep(1101073,2)),
+   COD_REF_SUB = c(rep(1101073,2)),
+   SUBSTITUTION = c(rep("Feijão - carioca (rajado)",2)))
+
+#Feijão - macassar (fradinho)----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("macassar|fradinho|macáçar")))
+
+ITEM_CORR<-tibble(
+   COD=c(7177,47617),
+   COD_SUB=c(rep(47617,2)),
+   COD_REF=c(rep(1101053,2)),
+   COD_REF_SUB=c(rep(1101053,2)),
+   SUBSTITUTION=c(rep("Feijão - macassar (fradinho)",2)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+#Batata baroa----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("batata|Batata|Mandioquinha|mandioquinha")))
+
+ITEM_CORR<-tibble(
+   COD=c(7217,7218,12223),
+   COD_SUB=c(rep(12223,3)),
+   COD_REF=c(1103046,1103048,1103046),
+   COD_REF_SUB=c(rep(1103046,3)),
+   SUBSTITUTION=c(rep("Batata-Baroa",3)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+#Balas----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("balas|Balas|Chicletes|chicletes|Chiclete|chiclete")))
+
+ITEM_CORR<-tibble(
+   COD=c(7223,12224),
+   COD_SUB=c(rep(12224,2)),
+   COD_REF=c(1104018,1104018),
+   COD_REF_SUB=c(rep(1104018,2)),
+   SUBSTITUTION=c(rep("Balas",2)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+#Chocolates----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("Chocolate|chocolate|bombom|Bombom|Achocolatado")))
+
+ITEM_CORR<-tibble(
+   COD=c(7224,7225, 107609,7231,107611),
+   COD_SUB=c(rep(107609,3), rep(107611,2)),
+   COD_REF=c(1104023,1104024,1104023 ,1104052,1104052),
+   COD_REF_SUB=c(rep(1104023,3), rep(1104052,2)),
+   SUBSTITUTION=c(rep("Chocolate em barra e bombom",3), rep("Chocolate e achocolatado em pó",2)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+#Gelatina----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("Gelatina|gelatina")))
+
+ITEM_CORR<-tibble(
+   COD=c(7227,107610),
+   COD_SUB=c(rep(107610,2)),
+   COD_REF=c(1104028,1104028),
+   COD_REF_SUB=c(rep(1104028,2)),
+   SUBSTITUTION=c(rep("Gelatina",2)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+#Lagarto----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("Lagarto|lagarto")))
+
+ITEM_CORR<-tibble(
+   COD=c(7297,12294),
+   COD_SUB=c(rep(12294,2)),
+   COD_REF=c(1107091,1107091),
+   COD_REF_SUB=c(rep(1107091,2)),
+   SUBSTITUTION=c(rep("Lagarto comum",2)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+#Salsicha----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("Salsicha|salsicha")))
+
+ITEM_CORR<-tibble(
+   COD=c(7338,12304,7409,107625),
+   COD_SUB=c(rep(12304,2),rep(107625,2)),
+   COD_REF=c(1109007,1109007,1115050,1115050),
+   COD_REF_SUB=c(rep(1109007,2),rep(1115050,2)),
+   SUBSTITUTION=c(rep("Salsicha",2),rep("Salsicha em conserva",2)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+#Salame----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("Salame|salame")))
+
+ITEM_CORR<-tibble(
+   COD=c(7342,12305),
+   COD_SUB=c(rep(12305,2)),
+   COD_REF=c(1109012,1109012),
+   COD_REF_SUB=c(rep(1109012,2)),
+   SUBSTITUTION=c(rep("Salame",2)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+#Carne seca----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("Carne seca|Carne-seca")))
+
+ITEM_CORR<-tibble(
+   COD=c(7346,12379),
+   COD_SUB=c(rep(12379,2)),
+   COD_REF=c(rep(1109056,2)),
+   COD_REF_SUB=c(rep(1109056,2)),
+   SUBSTITUTION=c(rep("Carne-seca e de Sol",2)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+#Hambúrger----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("Carne de hambúrguer|Hambúrger")))
+
+ITEM_CORR<-tibble(
+   COD=c(7348,12380),
+   COD_SUB=c(rep(12380,2)),
+   COD_REF=c(rep(1109088,2)),
+   COD_REF_SUB=c(rep(1109088,2)),
+   SUBSTITUTION=c(rep("Hambúrger",2)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+#Frango----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("Frango|frango")))
+
+ITEM_CORR<-tibble(
+   COD=c(7351,107617),
+   COD_SUB=c(rep(107617,2)),
+   COD_REF=c(rep(1110009,2)),
+   COD_REF_SUB=c(rep(1110009,2)),
+   SUBSTITUTION=c(rep("Frango inteiro",2)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+#Leite----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("Leite|leite")))
+
+ITEM_CORR<-tibble(
+   COD=c(7357,12393),
+   COD_SUB=c(rep(12393,2)),
+   COD_REF=c(rep(1111004,2)),
+   COD_REF_SUB=c(rep(1111004,2)),
+   SUBSTITUTION=c(rep("Leite longa vida",2)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+#Iogurte----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("Iogurte|iogurte|bebidas lácteas|leite|Leite")))
+
+ITEM_CORR<-tibble(
+   COD=c(7361,12394),
+   COD_SUB=c(rep(12394,2)),
+   COD_REF=c(rep(1111019,2)),
+   COD_REF_SUB=c(rep(1111019,2)),
+   SUBSTITUTION=c(rep("Iogurte e bebidas lácteas",2)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+#Margarina----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("Margarina|margarina")))
+
+ITEM_CORR<-tibble(
+   COD=c(7387,12395),
+   COD_SUB=c(rep(12395,2)),
+   COD_REF=c(rep(1113040,2)),
+   COD_REF_SUB=c(rep(1113040,2)),
+   SUBSTITUTION=c(rep("Margarina",2)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+#Açaí----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("Açaí|açaí")))
+
+ITEM_CORR<-tibble(
+   COD=c(7391,12396),
+   COD_SUB=c(rep(12396,2)),
+   COD_REF=c(rep(1114004,2)),
+   COD_REF_SUB=c(rep(1114004,2)),
+   SUBSTITUTION=c(rep("Açaí (emulsão)",2)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+#Chá-Mate----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("Mate|Chá")))
+
+ITEM_CORR<-tibble(
+   COD=c(7394,107620, 47631),
+   COD_SUB=c(rep(47631,3)),
+   COD_REF=c(rep(1114029,2), 1114091),
+   COD_REF_SUB=c(rep(1114091,3)),
+   SUBSTITUTION=c(rep("Chá mate (erva mate)",3)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+#Refrigerante Água mineral----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("Refrigerante|Água|água")))
+
+ITEM_CORR<-tibble(
+   COD=c(7395,107621,7400, 7437,107633),
+   COD_SUB=c(rep(107621,3), rep(107633,2)),
+   COD_REF=c(1114083,1114083,1114096, 1201007,1201007),
+   COD_REF_SUB=c(rep(1114083,3), rep(1201007,2)),
+   SUBSTITUTION=c(rep("Refrigerante e água mineral",5)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+#Ervilha----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("Ervilha")))
+
+ITEM_CORR<-tibble(
+   COD=c(7403,107622),
+   COD_SUB=c(rep(107622,2)),
+   COD_REF=c(rep(1115006,2)),
+   COD_REF_SUB=c(rep(1115006,2)),
+   SUBSTITUTION=c(rep("Ervilha em conserva",2)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+#Feijoada----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("Feijoada")))
+
+ITEM_CORR<-tibble(
+   COD=c(7404,107623),
+   COD_SUB=c(rep(107623,2)),
+   COD_REF=c(rep(1115008,2)),
+   COD_REF_SUB=c(rep(1115008,2)),
+   SUBSTITUTION=c(rep("Feijoada em conserva",2)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+#Sardinha----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("Sardinha|sardinha")))
+
+ITEM_CORR<-tibble(
+   COD=c(7408,107624),
+   COD_SUB=c(rep(107624,2)),
+   COD_REF=c(rep(1115039,2)),
+   COD_REF_SUB=c(rep(1115039,2)),
+   SUBSTITUTION=c(rep("Sardinha em conserva",2)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+#Carne de boi em conserva----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("Carne|carne")))
+
+ITEM_CORR<-tibble(
+   COD=c(7410,107626),
+   COD_SUB=c(rep(107626,2)),
+   COD_REF=c(rep(1115051,2)),
+   COD_REF_SUB=c(rep(1115051,2)),
+   SUBSTITUTION=c(rep("Carne de boi em conserva",2)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+#Milho----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("Milho-verde|Milho")))
+
+ITEM_CORR<-tibble(
+   COD=c(7413,107628, 7181,47618),
+   COD_SUB=c(rep(107628,2), rep(47618,2)),
+   COD_REF=c(rep(1115058,2), rep(1101079,2)),
+   COD_REF_SUB=c(rep(1115058,2), rep(1101079,2)),
+   SUBSTITUTION=c(rep("Milho-verde em conserva",2), rep("Milho (em grão)",2)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+#Atum----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("Atum")))
+
+ITEM_CORR<-tibble(
+   COD=c(7414,107630),
+   COD_SUB=c(rep(107630,2)),
+   COD_REF=c(rep(1115075,2)),
+   COD_REF_SUB=c(rep(1115075,2)),
+   SUBSTITUTION=c(rep("Atum em conserva",2)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+#Atomatado----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("Atomatado|Massa de tomate")))
+
+ITEM_CORR<-tibble(
+   COD=c(7417,109463),
+   COD_SUB=c(rep(109463,2)),
+   COD_REF=c(rep(1116005,2)),
+   COD_REF_SUB=c(rep(1116005,2)),
+   SUBSTITUTION=c(rep("Atomatado",2)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+#Sal----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("Sal")))
+
+ITEM_CORR<-tibble(
+   COD=c(7419,12397),
+   COD_SUB=c(rep(12397,2)),
+   COD_REF=c(rep(1116013,2)),
+   COD_REF_SUB=c(rep(1116013,2)),
+   SUBSTITUTION=c(rep("Sal",2)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+#Peixe - filhote----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("Filhote|filhote|fillhote|Fillhote")))
+
+ITEM_CORR<-tibble(
+   COD=c(7334,47623),
+   COD_SUB=c(rep(47623,2)),
+   COD_REF=c(rep(1108092,2)),
+   COD_REF_SUB=c(rep(1108092,2)),
+   SUBSTITUTION=c(rep("Peixe - filhote",2)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+#Requeijão----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("cremoso|Cremoso|requeijão|Requeijão")))
+
+ITEM_CORR<-tibble(
+   COD=c(7362,47627),
+   COD_SUB=c(rep(47627,2)),
+   COD_REF=c(rep(1111021,2)),
+   COD_REF_SUB=c(rep(1111021,2)),
+   SUBSTITUTION=c(rep("Requeijão",2)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+#Alimento infantil----
+CONF<-DICIO_F_1_ALM|>
+   group_by(COD_REF)|>
+   filter(str_detect(ITEM,c("infantil|Infantil")))
+
+ITEM_CORR<-tibble(
+   COD=c(7405,107702),
+   COD_SUB=c(rep(107702,2)),
+   COD_REF=c(rep(1115013,2)),
+   COD_REF_SUB=c(rep(1115013,2)),
+   SUBSTITUTION=c(rep("Alimento infantil",2)))
+
+ITEM_CORR_BULK<-bind_rows(ITEM_CORR_BULK,ITEM_CORR)
+
+
+#Combinando os DF----
+DICIO_F_2_ALM<-full_join(DICIO_F_1_ALM,ITEM_CORR_BULK,by=c("COD","COD_REF"))
+```
+
+## Criando indexadores por Sub-grupo alimentícios
+
+```{r Criando indexadores por sub-grupos}
+DICIO_F_2_ALM <- DICIO_F_2_ALM|>
+   separate(COD_REF, 
+            into = c("COD_SUB_GRUPO", "COD_SUB_GRUPO_ITEM"), 
+            sep = 4, remove = FALSE)
+
+COD_REF_GRUPOS <- tibble(COD_REF = c(0,1,11,12,1101:1117,1201))
+
+COD_REF_GRUPOS <- left_join(COD_REF_GRUPOS, DICIO_F_2_ALM, by = "COD_REF")
+
+COD_REF_GRUPOS <- COD_REF_GRUPOS|>
+   select(COD_SUB_GRUPO, ITEM)|>
+   mutate(NOME_SUB_GRUPO = ITEM, .keep="unused")
+
+DICIO_F_3_ALM <- left_join(COD_REF_GRUPOS, DICIO_F_2_ALM,
+                           by = c("COD_SUB_GRUPO" = "COD_SUB_GRUPO"))
+
+
+
+DICIO_1999_2023_ALIM_F <- DICIO_F_3_ALM |>
+   select(COD,COD_REF,ITEM,COD_SUB_GRUPO,NOME_SUB_GRUPO,COD_SUB,COD_REF_SUB,SUBSTITUTION)
+
+write_rds(DICIO_1999_2023_ALIM_F, "~/R program/GIAIA/GIAIA_Observatorio/Data/Dicionarios/IPCADicio/DICIO_1999_2023_IPCA_ALIM_F.rds", compress = "gz")
+
+rm(CONF,DICIO_F_1_ALM,DICIO_F_2_ALM,DICIO_F_3_ALM,ITEM_CORR,ITEM_CORR_BULK,zDICIO_COD_REF_REP, COD_REF_GRUPOS)
+```
+
+<br> <br>
+
+# Coleta dados
+
+## Funções de acesso
+
+```{r Funções de acesso}
+PERIOD_GEN <- function(AI, AF, N_GEO){
+  anos <- as.character(rep(AI:AF, times = N_GEO, each = 12))
+  meses_0 <- str_pad(c(1:12), 2, pad = "0")
+  PERIOD <- paste0(anos, meses_0)
+  return(PERIOD)
+}
+
+COLETA<-function(PR, L, V, GE){
+  
+  IPCA_STA <- NULL
+  ni <- 0
+  
+  for(P in PR){
+    IPCA_UNS <- suppressMessages(get_sidra(x = L,
+                                           variable = V,
+                                           geo = GE,
+                                           geo.filter = NULL,
+                                           period = c(P),
+                                           digits = "max",
+                                           format = 3,
+                                           header = T))
+    IPCA_STA <- bind_rows(IPCA_STA,IPCA_UNS)
+    ni <- ni+1
+    if(ni < length(PR)){
+      cat("Downloading", ni, "of", length(PR), "tables", "\n")
+    }else{cat("Última tabela", "\n")}
+  }
+  cat("Finalizado!", "\n")
+  return(IPCA_STA)
+}
+```
+
+
+## Período de agosto 1999 até junho 2006
+
+### Gerador de período de coleta 1999 até 2006
+
+```{r Gerador período - 1999-2006}
+PERIOD1 <- PERIOD_GEN(1999,2006,1)
+```
+
+### Coleta de dados - Brasil
+
+```{r ### Coleta de dados - Brasil - 1999-2006}
+IPCA_99_06_BR_VarMes <- COLETA(PERIOD1, 655, V = c(63), GE = c("Brazil"))
+write_rds(IPCA_99_06_BR_VarMes, "~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_1k99_2K06_VarMes_BRASIL_BRUTO.rds", compress = "gz")
+
+IPCA_99_06_BR_VarAcu <- COLETA(PERIOD1, 657, V = c(69), GE = c("Brazil"))
+write_rds(IPCA_99_06_BR_VarAcu, "~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_1k99_2K06_VarAcu_BRASIL_BRUTO.rds", compress = "gz")
+
+IPCA_99_06_BR_Peso <- COLETA(PERIOD1, 656, V = c(66), GE = c("Brazil"))
+write_rds(IPCA_99_06_BR_Peso, "~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_1k99_2K06_Peso_BRASIL_BRUTO.rds", compress = "gz")
+```
+
+### Coleta de dados - Cidades
+
+```{r ### Coleta de dados - Cidades - 1999-2006}
+IPCA_99_06_CIDA_VarMes <- COLETA(PERIOD1, 655, V = c(63), GE = c("City"))
+write_rds(IPCA_99_06_CIDA_VarMes, "~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_1k99_2K06_VarMes_CIDADE_BRUTO.rds", compress = "gz")
+
+IPCA_99_06_CIDA_VarAcu <- COLETA(PERIOD1, 657, V = c(69), GE = c("City"))
+write_rds(IPCA_99_06_CIDA_VarAcu, "~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_1k99_2K06_VarAcu_CIDADE_BRUTO.rds", compress = "gz")
+
+IPCA_99_06_CIDA_Peso <- COLETA(PERIOD1, 656, V = c(66), GE = c("City"))
+write_rds(IPCA_99_06_CIDA_Peso, "~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_1k99_2K06_Peso_CIDADE_BRUTO.rds", compress = "gz")
+```
+
+### Coleta de dados - Região metropolitana
+
+```{r ### Coleta de dados - Região metropolitana - 1999-2006}
+IPCA_99_06_METRO_VarMes <- COLETA(PERIOD1, 655, V = c(63), GE = c("MetroRegion"))
+write_rds(IPCA_99_06_METRO_VarMes, "~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_1k99_2K06_VarMes_METRO_BRUTO.rds", compress = "gz")
+
+IPCA_99_06_METRO_VarAcu <- COLETA(PERIOD1, 657, V = c(69), GE = c("MetroRegion"))
+write_rds(IPCA_99_06_METRO_VarAcu, "~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_1k99_2K06_VarAcu_METRO_BRUTO.rds", compress = "gz")
+
+IPCA_99_06_METRO_Peso <- COLETA(PERIOD1, 656, V = c(66), GE = c("MetroRegion"))
+write_rds(IPCA_99_06_METRO_Peso, "~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_1k99_2K06_Peso_METRO_BRUTO.rds", compress = "gz")
+```
+
+### Juntando os estratos e salvando o banco de dados
+
+```{r Bind final estratos geográficos SAVE - 1999-2006}
+#Carregando bases de dados----
+IPCA_99_06_BR_VarMes <- readRDS("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_1k99_2K06_VarMes_BRASIL_BRUTO.rds")
+IPCA_99_06_BR_VarAcu <- readRDS("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_1k99_2K06_VarAcu_BRASIL_BRUTO.rds")
+IPCA_99_06_BR_Peso <- readRDS("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_1k99_2K06_Peso_BRASIL_BRUTO.rds")
+
+IPCA_99_06_CIDA_VarMes <- readRDS("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_1k99_2K06_VarMes_CIDADE_BRUTO.rds")
+IPCA_99_06_CIDA_VarAcu <- readRDS("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_1k99_2K06_VarAcu_CIDADE_BRUTO.rds")
+IPCA_99_06_CIDA_Peso <- readRDS("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_1k99_2K06_Peso_CIDADE_BRUTO.rds")
+
+IPCA_99_06_METRO_VarMes <- readRDS("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_1k99_2K06_VarMes_METRO_BRUTO.rds")
+IPCA_99_06_METRO_VarAcu <- readRDS("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_1k99_2K06_VarAcu_METRO_BRUTO.rds")
+IPCA_99_06_METRO_Peso <- readRDS("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_1k99_2K06_Peso_METRO_BRUTO.rds")
+
+#Alterando nomenclatura das variáveis----
+datas <- c("IPCA_99_06_BR_VarMes", "IPCA_99_06_BR_VarAcu", "IPCA_99_06_BR_Peso", "IPCA_99_06_CIDA_VarMes", "IPCA_99_06_CIDA_VarAcu", "IPCA_99_06_CIDA_Peso", "IPCA_99_06_METRO_VarMes", "IPCA_99_06_METRO_VarAcu", "IPCA_99_06_METRO_Peso")
+
+for (df in datas) {
+   assign(df,setNames(get(df),c("NT_C","NT_D","UN","VALOR","COD_MUN","MUN","DATA_RAW","VAR","REF")))
+}
+
+# Juntando----
+IPCA_99_06 <- bind_rows(IPCA_99_06_BR_VarMes, IPCA_99_06_BR_VarAcu, IPCA_99_06_BR_Peso, IPCA_99_06_CIDA_VarMes, IPCA_99_06_CIDA_VarAcu, IPCA_99_06_CIDA_Peso, IPCA_99_06_METRO_VarMes, IPCA_99_06_METRO_VarAcu, IPCA_99_06_METRO_Peso)
+
+# Separando colunas com mais de uma informação----
+IPCA_1k99_2k06_DATA <- IPCA_99_06|>
+   separate(MUN, c("NOME_GEO","UF"), " - ")|>
+   separate(DATA_RAW, c("MES","ANO"), " ")|>
+   separate(VAR, c("INDICE","VAR"), " - ")|>
+   separate(REF, c("COD_REF","ITEM"), "\\.", fill="left")|>
+   mutate(COD_REF = as.numeric(COD_REF))|>
+   mutate(COD_REF = if_else(ITEM == "Índice geral", 0.0, COD_REF))
+
+#Salvando----
+write_rds(IPCA_1k99_2k06_DATA, "~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_1k99_2k06_DATA_FINAL.rds", compress = "gz")
+
+rm(IPCA_99_06, IPCA_99_06_BR_VarMes, IPCA_99_06_BR_VarAcu, IPCA_99_06_BR_Peso, IPCA_99_06_CIDA_VarMes, IPCA_99_06_CIDA_VarAcu, IPCA_99_06_CIDA_Peso, IPCA_99_06_METRO_VarMes, IPCA_99_06_METRO_VarAcu, IPCA_99_06_METRO_Peso)
+```
+
+
+## Período de julho 2006 até 2011
+
+### Gerador de período de coleta 2006 até 2011
+
+```{r Gerador período - 2006-2011}
+PERIOD1 <- PERIOD_GEN(2006,2011,1)
+```
+
+### Coleta de dados - Brasil
+
+```{r ### Coleta de dados - Brasil - 2006-2011}
+IPCA_06_11_BR <- COLETA(PERIOD1, 2938, V = c(63, 69, 66), GE = c("Brazil"))
+write_rds(IPCA_06_11_BR, "~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2K06_2K11_BRASIL_BRUTO.rds", compress = "gz")
+```
+
+### Coleta de dados - Cidades
+
+```{r ### Coleta de dados - Cidades - 2006-2011}
+IPCA_06_11_CIDA <- COLETA(PERIOD1, 2938, V = c(63, 69, 66), GE = c("City"))
+write_rds(IPCA_06_11_CIDA, "~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2K06_2K11_CIDADE_BRUTO.rds", compress = "gz")
+```
+
+### Coleta de dados - Região metropolitana
+
+```{r ### Coleta de dados - Região metropolitana - 2006-2011}
+IPCA_06_11_METRO <- COLETA(PERIOD1, 2938, V = c(63, 69, 66), GE = c("MetroRegion"))
+write_rds(IPCA_06_11_METRO, "~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2K06_2K11_METRO_BRUTO.rds", compress = "gz")
+```
+
+### Juntando os três estratos e salvando o banco de dados
+
+```{r Bind final estratos geográficos SAVE - 2006-2011}
+# Carregando bancos de dados----
+IPCA_06_11_BR <- readRDS("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2K06_2K11_BRASIL_BRUTO.rds")
+IPCA_06_11_CIDA <- readRDS("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2K06_2K11_CIDADE_BRUTO.rds")
+IPCA_06_11_METRO <- readRDS("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2K06_2K11_METRO_BRUTO.rds")
+
+#Alterando nomenclatura das variáveis----
+datas <- c("IPCA_06_11_BR", "IPCA_06_11_CIDA", "IPCA_06_11_METRO")
+
+for (df in datas) {
+   assign(df,setNames(get(df),c("NT_C","NT_D","UN","VALOR","COD_MUN","MUN","DATA_RAW","VAR","REF")))
+}
+
+# Juntando----
+IPCA_06_11 <- bind_rows(IPCA_06_11_BR, IPCA_06_11_CIDA, IPCA_06_11_METRO)
+
+# Separando colunas com mais de uma informação----
+IPCA_2k6_2k11_DATA <- IPCA_06_11|>
+   separate(MUN, c("NOME_GEO","UF"), " - ")|>
+   separate(DATA_RAW, c("MES","ANO"), " ")|>
+   separate(VAR, c("INDICE","VAR"), " - ")|>
+   separate(REF, c("COD_REF","ITEM"), "\\.", fill="left")|>
+   mutate(COD_REF = as.numeric(COD_REF))|>
+   mutate(COD_REF = if_else(ITEM == "Índice geral", 0.0, COD_REF))
+
+write_rds(IPCA_2k6_2k11_DATA, "~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2k6_2k11_DATA_FINAL.rds", compress = "gz")
+
+rm(IPCA_06_11, IPCA_06_11_BR, IPCA_06_11_CIDA, IPCA_06_11_METRO)
+```
+
+
+## Período de 2012 até 2019
+
+### Gerador de período de coleta 2012 até 2019
+
+```{r Gerador período - 2012-2019}
+PERIOD1 <- PERIOD_GEN(2012, 2019, 1)
+```
+
+### Coleta de dados - Brasil
+
+```{r Coleta de dados - Brasil - 2012-2019}
+IPCA_12_19_BR <- COLETA(PERIOD1, 1419, V = c(63, 69, 66), GE = c("Brazil"))
+write_rds(IPCA_12_19_BR, "~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2K12_2K19_BR_BRUTO.rds", compress = "gz")
+```
+
+### Coleta de dados - Cidades
+
+```{r Coleta de dados - Cidades - 2012-2019}
+IPCA_12_19_CIDA <- COLETA(PERIOD1, 1419, V = c(63, 69, 66), GE = c("City"))
+write_rds(IPCA_12_19_CIDA, "~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2K12_2K19_CIDADE_BRUTO.rds", compress = "gz")
+```
+
+### Coleta de dados - Região metropolitana
+
+```{r Coleta de dados - Região metropolitana - 2012-2019}
+IPCA_12_19_METRO <- COLETA(PERIOD1, 1419, V = c(63, 69, 66), GE = c("MetroRegion"))
+write_rds(IPCA_12_19_METRO, "~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2K12_2K19_METRO_BRUTO.rds", compress = "gz")
+```
+
+### Juntando os três estratos e salvando o banco de dados
+
+```{r Bind final estratos geográficos SAVE - 2012-2019}
+# Carregando bancos de dados----
+IPCA_12_19_BR <- readRDS("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2K12_2K19_BR_BRUTO.rds")
+IPCA_12_19_CIDA <- readRDS("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2K12_2K19_CIDADE_BRUTO.rds")
+IPCA_12_19_METRO <- readRDS("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2K12_2K19_METRO_BRUTO.rds")
+
+#Alterando nomenclatura das variáveis----
+datas <- c("IPCA_12_19_BR", "IPCA_12_19_CIDA", "IPCA_12_19_METRO")
+
+for (df in datas) {
+   assign(df,setNames(get(df),c("NT_C","NT_D","UN","VALOR","COD_MUN","MUN","DATA_RAW","VAR","REF")))
+}
+
+# Juntando----
+IPCA_12_19 <- bind_rows(IPCA_12_19_BR,IPCA_12_19_CIDA,IPCA_12_19_METRO)
+
+#Separando colunas com mais de uma informação----
+IPCA_2k12_2k19_DATA <- IPCA_12_19|>
+   separate(MUN, c("NOME_GEO", "UF"), " - ")|>
+   separate(DATA_RAW, c("MES", "ANO"), " ")|>
+   separate(VAR, c("INDICE", "VAR"), " - ")|>
+   separate(REF, c("COD_REF", "ITEM"), "\\.", fill = "left")|>
+   mutate(COD_REF = as.numeric(COD_REF))|>
+   mutate(COD_REF = if_else(ITEM == "Índice geral", 0.0, COD_REF))
+
+# Salvando----
+write_rds(IPCA_2k12_2k19_DATA, "~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2k12_2k19_DATA_FINAL.rds", compress = "gz")
+
+rm(IPCA_12_19_BR, IPCA_12_19_CIDA, IPCA_12_19_METRO, IPCA_12_19)
+
+```
+
+## Período de 2020 até 2022
+
+### Gerador de período de coleta 2020 até 2022
+
+```{r Gerador período - 2020-2022}
+PERIOD1 <- PERIOD_GEN(2020,2022,1)
+```
+
+### Coleta de dados - Brasil
+
+```{r}
+IPCA_20_22_BR <- COLETA(PERIOD1, 7060, V = c(63, 69, 66), GE = c("Brazil"))
+write_rds(IPCA_20_22_BR, "~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2K20_2K22_BR_BRUTO.rds", compress = "gz")
+```
+
+### Coleta de dados - Cidades
+
+```{r ### Coleta de dados - Cidades - 2020-2022}
+IPCA_20_22_CIDA <- COLETA(PERIOD1, 7060, V=c(63, 69, 66), GE = c("City"))
+write_rds(IPCA_20_22_CIDA,"~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2K20_2K22_CIDADE_BRUTO.rds", compress = "gz")
+```
+
+### Coleta de dados - Região metropolitana
+
+```{r ### Coleta de dados - Região metropolitana - 2020-2022}
+IPCA_20_22_METRO <- COLETA(PERIOD1, 7060, V = c(63, 69, 66), GE = c("MetroRegion"))
+write_rds(IPCA_20_22_METRO, "~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2K20_2K22_METRO_BRUTO.rds", compress = "gz")
+```
+
+### Juntando os TRÊS estratos e salvando o banco de dados
+
+```{r Bind final estratos geográficos SAVE - 2020-2022}
+# Carregando bancos de dados----
+IPCA_20_22_BR <- readRDS("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2K20_2K22_BR_BRUTO.rds")
+IPCA_20_22_CIDA <- readRDS("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2K20_2K22_CIDADE_BRUTO.rds")
+IPCA_20_22_METRO <- readRDS("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2K20_2K22_METRO_BRUTO.rds")
+
+#Alterando nomenclatura das variáveis----
+datas <- c("IPCA_20_22_BR", "IPCA_20_22_CIDA", "IPCA_20_22_METRO")
+
+for (df in datas) {
+   assign(df,setNames(get(df),c("NT_C","NT_D","UN","VALOR","COD_MUN","MUN","DATA_RAW","VAR","REF")))
+}
+
+# Juntando----
+IPCA_20_22 <- bind_rows(IPCA_20_22_BR, IPCA_20_22_CIDA, IPCA_20_22_METRO)
+
+#Separando colunas com mais de uma informação.
+IPCA_2k20_2k22_DATA <- IPCA_20_22 |>
+   separate(MUN, c("NOME_GEO", "UF"), " - ") |>
+   separate(DATA_RAW, c("MES", "ANO"), " ") |>
+   separate(VAR, c("INDICE","VAR"), " - ") |>
+   separate(REF, c("COD_REF", "ITEM"), "\\.", fill = "left") |>
+   mutate(COD_REF = as.numeric(COD_REF)) |>
+   mutate(COD_REF = if_else(ITEM == "Índice geral", 0.0, COD_REF))
+
+# Salvando----
+write_rds(IPCA_2k20_2k22_DATA, "~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2k20_2k22_DATA_FINAL.rds", compress = "gz")
+
+rm(IPCA_20_22_BR, IPCA_20_22_CIDA, IPCA_20_22_METRO, datas, df)
+```
+
+## Período de 2023 em diante
+
+### Gerador de período de coleta 2023 em diante
+
+```{r Gerador período - 2023}
+PERIOD1 <- PERIOD_GEN(2023,2023,1)
+```
+
+### Coleta de dados - Brasil
+
+```{r}
+IPCA_23_BR <- COLETA(PERIOD1, 7060, V = c(63, 69, 66), GE = c("Brazil"))
+write_rds(IPCA_23_BR, "~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2K23_BR_BRUTO.rds", compress = "gz")
+```
+
+### Coleta de dados - Cidades
+
+```{r ### Coleta de dados - Cidades - 2023}
+IPCA_23_CIDA <- COLETA(PERIOD1, 7060, V=c(63, 69, 66), GE = c("City"))
+write_rds(IPCA_23_CIDA,"~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2K23_CIDADE_BRUTO.rds", compress = "gz")
+```
+
+### Coleta de dados - Região metropolitana
+
+```{r ### Coleta de dados - Região metropolitana - 2023}
+IPCA_23_METRO <- COLETA(PERIOD1, 7060, V = c(63, 69, 66), GE = c("MetroRegion"))
+write_rds(IPCA_23_METRO, "~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2K23_METRO_BRUTO.rds", compress = "gz")
+```
+
+
+### Juntando os TRÊS estratos e salvando o banco de dados
+
+```{r Bind final estratos geográficos SAVE - 2020-2022}
+# Carregando bancos de dados----
+IPCA_23_BR <- readRDS("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2K23_BR_BRUTO.rds")
+IPCA_23_CIDA <- readRDS("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2K23_CIDADE_BRUTO.rds")
+IPCA_23_METRO <- readRDS("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2K23_METRO_BRUTO.rds")
+
+#Alterando nomenclatura das variáveis----
+datas <- c("IPCA_23_BR", "IPCA_23_CIDA", "IPCA_23_METRO")
+
+for (df in datas) {
+   assign(df,setNames(get(df),c("NT_C","NT_D","UN","VALOR","COD_MUN","MUN","DATA_RAW","VAR","REF")))
+}
+
+# Juntando----
+IPCA_23 <- bind_rows(IPCA_23_BR, IPCA_23_CIDA, IPCA_23_METRO)
+
+#Separando colunas com mais de uma informação.
+IPCA_2k23_DATA <- IPCA_23 |>
+   separate(MUN, c("NOME_GEO", "UF"), " - ") |>
+   separate(DATA_RAW, c("MES", "ANO"), " ") |>
+   separate(VAR, c("INDICE","VAR"), " - ") |>
+   separate(REF, c("COD_REF", "ITEM"), "\\.", fill = "left") |>
+   mutate(COD_REF = as.numeric(COD_REF)) |>
+   mutate(COD_REF = if_else(ITEM == "Índice geral", 0.0, COD_REF))
+
+# Salvando----
+write_rds(IPCA_2k23_DATA, "~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2k23_DATA_FINAL.rds", compress = "gz")
+
+rm(IPCA_23_BR, IPCA_23_CIDA, IPCA_23_METRO, datas, df)
+```
+
+## Juntando os dados das pesquisas
+
+```{r Junção de todos os dados}
+#Carregando bases de dados----
+IPCA_1k99_2k06_DATA <- readRDS("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_1k99_2k06_DATA_FINAL.rds")
+IPCA_2k6_2k11_DATA <- readRDS("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2k6_2k11_DATA_FINAL.rds")
+IPCA_2k12_2k19_DATA <- readRDS("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2k12_2k19_DATA_FINAL.rds")
+IPCA_2k20_2k22_DATA <- readRDS("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2k20_2k22_DATA_FINAL.rds")
+IPCA_2k23_DATA <- readRDS("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_2k23_DATA_FINAL.rds")
+
+#Juntando----
+IPCA_1K99_2K23_DATA_LAST <- bind_rows(IPCA_1k99_2k06_DATA,
+                                      IPCA_2k6_2k11_DATA,
+                                      IPCA_2k12_2k19_DATA,
+                                      IPCA_2k20_2k22_DATA,
+                                      IPCA_2k23_DATA)
+
+#Checando se não há entradas repetidas----
+REP_TEST <- distinct(IPCA_1K99_2K23_DATA_LAST)
+rm(REP_TEST)
+
+# Salvando banco de dados----
+write_rds(IPCA_1K99_2K23_DATA_LAST, "~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_1K99_2K23_DATA_LAST.rds", compress = "gz")
+
+rm(PERIOD1, PERIOD_GEN, COLETA, DICIO_655, DICIO_656, DICIO_657, DICIO_7060, DICIO_2938, DICIO_1419, IPCA_1k99_2k06_DATA, IPCA_2k12_2k19_DATA, IPCA_2k20_2k22_DATA, IPCA_2k6_2k11_DATA, IPCA_2k23_DATA, IPCA_23, REP_TEST)
+```
+
+`REP_TEST` possui mesmo número de linhas que o `IPCA_1K99_2K23_DATA_LAST`, logo, não há entradas repetidas.  
+
+
+# Manipulações e processamentos adicionais
+
+## Criando novos indexadores
+
+```{r}
+# Carregando dicionário alimentação----
+DICIO_1999_2023_ALIM_F <- readRDS("~/R program/GIAIA/GIAIA_Observatorio/Data/Dicionarios/IPCADicio/DICIO_1999_2023_IPCA_ALIM_F.rds")
+
+# Carregando base de dados `IPCA_1K99_2K23_DATA_LAST`----
+IPCA_1K99_2K23_DATA_LAST <- read_rds("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_1K99_2K23_DATA_LAST.rds")
+```
+
+### Subgrupos
+
+```{r Criando Subgrupos}
+# Criando os indexadores de Sub-grupos----
+IPCA_1K99_2K23_DATA_LAST_H_1 <- IPCA_1K99_2K23_DATA_LAST |>
+   separate(COD_REF, into = c("COD_SUB_GRUPO", "COD_SUB_GRUPO_ITEM"),
+            sep = 4, remove = FALSE)
+
+IPCA_1K99_2K23_DATA_LAST_H_2 <- left_join(IPCA_1K99_2K23_DATA_LAST_H_1,
+                                          DICIO_1999_2023_ALIM_F,
+                                          by=c("COD_REF","ITEM","COD_SUB_GRUPO"))
+
+IPCA_1K99_2K23_DATA_LAST_H_3 <- IPCA_1K99_2K23_DATA_LAST_H_2|>
+   mutate(COD_REF = if_else(is.na(COD_REF_SUB) == TRUE, COD_REF, COD_REF_SUB))|>
+   mutate(COD = if_else(is.na(COD_SUB) == TRUE, COD, COD_SUB))|>
+   mutate(ITEM = if_else(is.na(SUBSTITUTION) == TRUE, ITEM, SUBSTITUTION))
+```
+
+### Períodos
+
+```{r Criando Períodos}
+# Criando os indexadores de Período----
+MESES <- 
+   tibble(
+      MES_PT = c("janeiro","fevereiro","março","abril","maio","junho",
+                 "julho","agosto","setembro","outubro","novembro","dezembro"),
+      MES_INGLES = c("jan","feb","mar","apr","may","jun",
+                     "jul","aug","sep","oct","nov","dec"),
+      NUM_MES = c(1:12))
+
+IPCA_1K99_2K23_DATA_LAST_H_4 <- left_join(IPCA_1K99_2K23_DATA_LAST_H_3,
+                                          MESES, 
+                                          by = c("MES" = "MES_PT"))
+
+IPCA_1K99_2K23_DATA_LAST_H_5 <- IPCA_1K99_2K23_DATA_LAST_H_4 |>
+   mutate(DATE = paste(MES_INGLES, " ", "1", ANO)) |>
+   mutate(DATE = mdy(DATE)) |>
+   mutate(PERIODO=
+            factor(
+              case_when(
+as_date("1999-07-31")< DATE & DATE < as_date("2006-07-01")~"Ago 1999 - Jun 2006",
+as_date("2006-06-01")< DATE & DATE < as_date("2012-01-01")~"Jul 2006 - Dez 2011",
+as_date("2011-12-31")< DATE & DATE < as_date("2020-01-01")~"Jan 2012 - Dez 2019",
+as_date("2019-12-31")< DATE & DATE < as_date("2024-01-01")~"Jan 2020 - Dez 2023",
+TRUE ~"PERDIDO NO TEMPO"),
+ordered = TRUE, levels = c("Ago 1999 - Jun 2006",
+                           "Jul 2006 - Dez 2011",
+                           "Jan 2012 - Dez 2019",
+                           "Jan 2020 - Dez 2023")))
+```
+
+### POF
+
+```{r Criando POFs}
+# Criando os indexadores de POF----
+DICIO_POF <- data.frame(
+  PERIODO = c("Ago 1999 - Jun 2006", "Jul 2006 - Dez 2011",
+              "Jan 2012 - Dez 2019", "Jan 2020 - Dez 2023"),
+  POF = c("POF 1995-1996", "POF 2002-2003", "POF 2008-2009", "POF 2017-2018"))
+
+
+IPCA_1K99_2K23_DATA_LAST_H_6 <- 
+   full_join(IPCA_1K99_2K23_DATA_LAST_H_5, DICIO_POF, by = "PERIODO")
+  
+
+# Organização final----
+IPCA_1K99_2K23_DATA_FINAL_H <- IPCA_1K99_2K23_DATA_LAST_H_6 |>
+   select(COD,NT_C,NT_D,COD_MUN,NOME_GEO,UF,ANO,DATE,PERIODO,POF,INDICE,VAR,
+          COD_REF,COD_SUB_GRUPO,NOME_SUB_GRUPO,ITEM,UN,VALOR) |> 
+   mutate(PERIODO = as.ordered(PERIODO),
+          POF = as.ordered(POF),
+          COD_SUB_GRUPO = as.numeric(COD_SUB_GRUPO),
+          UF = case_when(
+             NOME_GEO == "Brasil" ~ "BR",
+             TRUE ~ as.character(UF)))
+```
+
+### Conferindo e ajustando base de dados com novos indexadores
+
+```{r Ajustes novos index}
+## Verificando valores NA----
+verif <- IPCA_1K99_2K23_DATA_FINAL_H |> 
+   filter(is.na(VALOR)) # tem cidades que terão NA para determinados produtos, pois varia de acordo com as POFS de cada local
+
+IPCA_1K99_2K23_DATA_FINAL_H_1 <- IPCA_1K99_2K23_DATA_FINAL_H |> 
+  drop_na(VALOR)
+
+
+# ## Verificando Regiões com peso mensal = 0 (Item sem valor de IPCA, porém presente)----
+# verif <- IPCA_1K99_2K23_DATA_FINAL_H |> 
+#    filter(VAR == "Peso mensal" & VALOR == 0) # Serão removidos
+# 
+# IPCA_1K99_2K23_DATA_FINAL_H_1 <- IPCA_1K99_2K23_DATA_FINAL_H_1 |> 
+#   filter(!c(VAR == "Peso mensal" & VALOR == 0))
+
+# Salvando base de dados----
+write_rds(IPCA_1K99_2K23_DATA_FINAL_H_1, "~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_1K99_2K23_DATA_FINAL_H_1.rds", compress = "gz")
+
+rm(IPCA_1K99_2K23_DATA_LAST,IPCA_1K99_2K23_DATA_LAST_H_1,IPCA_1K99_2K23_DATA_LAST_H_2,IPCA_1K99_2K23_DATA_LAST_H_3,IPCA_1K99_2K23_DATA_LAST_H_4,IPCA_1K99_2K23_DATA_LAST_H_5,IPCA_1K99_2K23_DATA_LAST_H_6,IPCA_1K99_2K23_DATA_FINAL_H,DICIO_POF,MESES, DICIO_1999_2023_ALIM_F,verif)
+```
+
+
+## Adicionando estruturas de ponderação POF
+
+Ponderações processadas em `Data/Dicionarios/IPCADicio/IPCAPonderacao`.  
+
+```{r}
+# Carregando dicionário ponderações----
+POND_96_19_FINAL <- read_rds("~/R program/GIAIA/GIAIA_Observatorio/Data/Dicionarios/IPCADicio/POND_96_19_FINAL.rds")
+
+# Carregando base de dados IPCA
+IPCA_1K99_2K23_DATA_FINAL_H_1 <- read_rds("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_1K99_2K23_DATA_FINAL_H_1.rds")
+```
+
+```{r}
+# Juntando IPCA com ponderação----
+IPCA_1K99_2K23_DATA_FINAL_H_2 <- full_join(IPCA_1K99_2K23_DATA_FINAL_H_1, POND_96_19_FINAL, by = c("NOME_GEO","PERIODO", "POF", "COD_REF", "ITEM"))
+
+# Verificando NA----
+verif <- IPCA_1K99_2K23_DATA_FINAL_H_2 |> 
+   filter(is.na(IPCA_1K99_2K23_DATA_FINAL_H_2$VAL_POND))
+
+
+#### AC (Rio Branco), SE (Aracaju) e MA (São Luís), entre 2018 e 2019 (POF 08-09), possuem valor de IPCA, porém, não possuem ponderação. Serão excluídos essas observações.
+IPCA_1K99_2K23_DATA_FINAL_H_3 <- IPCA_1K99_2K23_DATA_FINAL_H_2 |> 
+   filter(!c(UF %in% c("AC", "SE", "MA") & ANO %in% c(2018, 2019)))
+
+
+#### Valor IPCA "NA" e VAL_POND "NA"
+verif <- IPCA_1K99_2K23_DATA_FINAL_H_3 |> 
+   filter(is.na(VALOR))
+
+IPCA_1K99_2K23_DATA_FINAL_H_4 <- IPCA_1K99_2K23_DATA_FINAL_H_3 |> 
+   drop_na(VALOR)
+
+
+verif <- IPCA_1K99_2K23_DATA_FINAL_H_4 |> 
+   filter(is.na(VAL_POND))
+
+IPCA_1K99_2K23_DATA_FINAL_H_5 <- IPCA_1K99_2K23_DATA_FINAL_H_4 |> 
+   drop_na(VAL_POND)
+
+write_rds(IPCA_1K99_2K23_DATA_FINAL_H_5, "~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_1K99_2K23_DATA_FINAL_H_5.rds", compress = "gz")
+
+rm(IPCA_1K99_2K23_DATA_FINAL_H_1, IPCA_1K99_2K23_DATA_FINAL_H_2, IPCA_1K99_2K23_DATA_FINAL_H_3, IPCA_1K99_2K23_DATA_FINAL_H_4, POND_99_19_J, verif)
+```
+
+
+```{r}
+#Serão selecionadas as ponderações: "Ago 1999" para POF 1996-1997, "Abr 2006" para POF02-03; "Jan 2009" para POF08-09; "Dez 2019" para POF18-19. 
+# # Selecionando e organizando as ponderadas a serem utilizadas----
+# unique(POND_96_19_FINAL$PERIODO_POND)
+# 
+# POND_99_19_J <- POND_96_19_FINAL |> 
+#    filter(PERIODO_POND %in% c("Ago 1999", "Abr 2006", "Jan 2009", "Dez 2019")) |>
+#    select(NOME_GEO, PERIODO, POF, PERIODO_POND, COD_REF, ITEM, VAL_POND)
+# 
+# rm(POND_96_19_FINAL)
+```
+
+
+## Adicionando Cadeias Agropecuárias e Nível de processamento
+
+```{r}
+#Carregando bancos de dados
+DICIO_CADEIA_PROC <- read_excel("~/R program/GIAIA/GIAIA_Observatorio/Data/Dicionarios/IPCADicio/DICIO_CADEIA_PROC.xlsx")
+
+IPCA_1K99_2K23_DATA_FINAL_H_5 <- read_rds("~/R program/GIAIA/GIAIA_Observatorio/Data/Raw/IPCARaw/IPCA_1K99_2K23_DATA_FINAL_H_5.rds")
+
+# Juntando----
+IPCA_1K99_2K23_DATA_FINAL_H_6 <- 
+   full_join(IPCA_1K99_2K23_DATA_FINAL_H_5, DICIO_CADEIA_PROC,
+             by=c("COD_REF","COD_SUB_GRUPO","ITEM"))
+
+# Organizando dados finais
+IPCA_1K99_2K23_DATA_FINAL <- IPCA_1K99_2K23_DATA_FINAL_H_6 |> 
+  mutate(ANO = as.numeric(ANO),
+         PERIODO = as.ordered(PERIODO),
+         POF = as.ordered(POF),
+         NIVEL_PROC = as.ordered(NIVEL_PROC)) |> 
+  select(1:10, 19, 11:16,  21, 22, 17, 18, 20)
+
+rm(IPCA_1K99_2K23_DATA_FINAL_H_5, IPCA_1K99_2K23_DATA_FINAL_H_6, DICIO_CADEIA_PROC)
+```
+
+### Salvando banco de dados com cadeia e nível proc.
+
+```{r}
+write_rds(IPCA_1K99_2K23_DATA_FINAL, "~/R program/GIAIA/GIAIA_Observatorio/Data/Final/IPCA_1K99_2K23_DATA_FINAL.rds", compress = "gz")
+
+IPCA_1K99_2K23_DATA_FINAL <- read_rds("~/R program/GIAIA/GIAIA_Observatorio/Data/Final/IPCA_1K99_2K23_DATA_FINAL.rds", compress = "gz")
+```
+

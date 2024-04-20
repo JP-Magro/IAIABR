@@ -1,0 +1,375 @@
+---
+title: "Comércio Exterior - ComexStat"
+subtitle: "Processamento de dados"
+author: "Gustavo Jun Yakushiji"
+date: last-modified
+date-format: "DD-MM-YYYY"
+lang: pt-BR
+format: 
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc_depth: 4
+    number-sections: true
+    page-layout: full
+---
+
+```{r}
+#| include: false
+
+options(scipen = 999)
+
+knitr::opts_chunk$set(
+   warning = FALSE,
+   echo = TRUE,
+   message = FALSE,
+   comment = "#>",
+   error = TRUE,
+   fig.align = "center",
+   fig.width = 12,
+   fig.height = 5
+)
+
+# Bibliotecas
+library(ComexstatR)
+library(tidyverse)
+library(kableExtra)
+library(readxl)
+```
+
+# Indexação Agrostat e Comex
+
+Uma vez obtido o indexador final, será realizado a indexação com os bancos de dados de exportação e importação.  
+
+```{r}
+# Carregando o dicionário Agrostat
+dicio_agrostat <- read_rds("../indexadores/agrostat-dicio.rds")
+
+# Carregando dados Comex exportação e importação
+comex_exp_imp <- read_rds("../coleta/data-raw/comex-raw/comex-exp-imp-97-23-bruto.rds")
+```
+
+```{r}
+# Indexação com Exportação e Importação
+comex_index <- 
+   full_join(comex_exp_imp, dicio_agrostat, by = c("cod_ncm", "desc_ncm")) |> 
+   filter(categ != is.na(categ)) # Removendo produtos não alimentícios
+```
+
+## Testando indexação
+
+```{r}
+# Testes para verificar indexação
+## Geral
+TESTE <- data.frame(COD_VERIF = unique(comex_index$cod_ncm))
+### Verificou-se que nº de linhas do banco de dados é o mesmo que o do dicionário, quando fez unique após join e filter.
+
+## Exportação
+TESTE_EXP <- comex_index |>
+   filter(tipo_op == "Exportação") |> 
+   summarise(COD_VERIF = unique(cod_ncm))
+### Verificou-se que na exportação, todos os NCMs do dicionário estão presentes no banco de dados de exportação
+
+## Importação
+TESTE_IMP <- comex_index |>
+   filter(tipo_op == "Importação") |> 
+   summarise(COD_VERIF = unique(cod_ncm))
+
+nrow(dicio_agrostat) - nrow(TESTE_IMP)
+### Verificou-se que na importação, 215 NCMs do dicionário não estão presentes no banco de dados de importação
+
+## Entradas repetidas
+TEST_REP <- distinct(comex_index)
+### Tudo OK (mesmo nº linhas, sem repetições)
+
+rm(comex_exp_imp, TESTE, TESTE_EXP, TESTE_IMP, TEST_REP, dicio_agrostat)
+```
+
+Após a indexação e a verificação, identificou-se que 215 classificações NCM não estão presentes no banco de dados de importação, quando comparado ao indexador do Comex Stat, o que indica que os dados de exportação possuem 215 descrições NCM a mais que os da importação.  
+
+# Processamento pós-indexação
+
+Uma vez indexado, serão realizados processamentos dos dados obtidos para padronização e organização da base de dados completa.  
+
+```{r}
+comex_completo <- comex_index |> 
+   select(
+      tipo_op, ano, categ, setor, subsetor, prod, cod_ncm, desc_ncm,
+      valor_dolar, kg_liq
+   ) |>
+   arrange(tipo_op, ano, categ, setor, subsetor, prod, desc_ncm) |> 
+   mutate(
+      valor_dolar = as.numeric(valor_dolar),
+      kg_liq = as.numeric(kg_liq)
+   )
+
+write_rds(comex_completo, "../comex-97-23-completo.rds")
+
+rm(comex_index)
+```
+
+# Seleção de produtos de interesse
+
+```{r}
+comex_completo <- read_rds("../comex-97-23-completo.rds")
+```
+
+## Produtos agropecuários
+
+Para a finalidade do trabalho, serão selecionados produtos agropecuários respectivos a **19** cadeias agropecuárias, sendo elas: açúcar, arroz, banana, batata, cacau, café, cebola, feijão, laranja, mandioca, milho, soja, tomate, trigo, leite, ovos de galinha, carcaça de frango, bovina e suína.  
+
+```{r}
+# Açúcar
+zsucroalcool <- comex_completo |>
+   filter(categ == "Complexo sucroalcooleiro",
+          subsetor %in% c("Açúcar de cana ou beterraba", "Demais açúcares")) |>
+   mutate(cadeia = "Complexo sucroalcooleiro")
+
+# Arroz
+zarroz <- comex_completo |>
+   filter(str_detect(desc_ncm, c("Arroz|arroz"))) |>
+   mutate(cadeia = "Arroz")
+
+# Banana
+zbanana <- comex_completo |>
+   filter(str_detect(desc_ncm, c("Banana|banana|Bananas|bananas"))) |>
+   mutate(cadeia = "Banana")
+
+# Batata
+zbatata <- comex_completo |>
+   filter(str_detect(desc_ncm, c("Batata|batata|Batatas|batatas"))) |>
+   mutate(cadeia = "Batata")
+
+# Cacau e seus produtos
+zcacau <- comex_completo |> 
+   filter(categ == "Cacau e seus produtos") |> 
+   mutate(cadeia = "Cacau")
+
+# Café
+zcafe <- comex_completo |>
+   filter(str_detect(desc_ncm, c("Cafe|cafe|Café|café"))) |>
+   mutate(cadeia = "Café")
+
+# Cebola
+zcebola <- comex_completo |>
+   filter(str_detect(desc_ncm, c("Cebola|cebola|Cebolas|cebolas"))) |>
+   mutate(cadeia = "Cebola")
+
+# Feijão
+zfeijao <- comex_completo |>
+   filter(str_detect(desc_ncm, c("Feijão|feijão|Feijao|feijao|Feijões|feijões|Feijoes|feijoes"))) |>
+   mutate(cadeia = "Feijão")
+
+# Laranja
+zlaranja <- comex_completo |>
+   filter(str_detect(desc_ncm, c("Laranja|laranja|Laranjas|laranjas|Doces, geléias, \"marmelades\", pures e pastas, de cítricos|Farinhas, sêmolas e pós, dos produtos do capítulo 8|Cascas de frutos cítricos, de melões ou de melancias, frescas, secas, congeladas ou apresentadas em água salgada, sulfurada ou adicionada de outras substâncias destinadas a assegurar transitoriamente a sua conservação"))) |>
+   mutate(cadeia = "Laranja")
+
+# Mandioca
+zmandioca <- comex_completo |>
+   filter(str_detect(desc_ncm, c("Mandioca|mandioca|Mandiocas|mandiocas"))) |>
+   mutate(cadeia = "Mandioca")
+
+# Milho
+zmilho <- comex_completo |>
+   filter(str_detect(desc_ncm, c("Milho|milho|Milhos|milhos")),
+          !(str_detect(desc_ncm, c("Tomilho")))) |>
+   mutate(cadeia = "Milho")
+
+# Soja
+zsoja <- comex_completo |>
+   filter(str_detect(desc_ncm, c("Soja|soja|Sojas|sojas|Margarina"))) |>
+   mutate(cadeia = "Soja")
+
+# Tomate
+ztomate <- comex_completo |>
+   filter(str_detect(desc_ncm, c("Tomate|tomate|Tomates|tomates"))) |>
+   mutate(cadeia = "Tomate")
+
+# Trigo
+ztrigo1 <- comex_completo |>
+   filter(categ == "Trigo") |>
+   mutate(cadeia = "Trigo")
+
+ztrigo2 <- comex_completo |>
+   filter(desc_ncm == "Preparações que contenham xilanase e betagluconase, com suporte de farinha de trigo, dos tipos utilizados na alimentação de animais") |>
+   mutate(cadeia = "Trigo")
+
+# Leite
+zleite <- comex_completo |> 
+   filter(categ == "Lácteos") |> 
+   mutate(cadeia = "Bovinocultura de leite")
+
+# Ovos de galinha
+zovo <- comex_completo |> 
+   filter(categ == "Avicultura de postura") |> 
+   mutate(cadeia = "Avicultura de postura")
+
+# Carcaça bovino
+zbovino <- comex_completo |> 
+   filter(categ == "Bovinocultura") |> 
+   mutate(cadeia = "Bovinocultura de corte")
+
+# Carcaça suíno
+zsuino <- comex_completo |> 
+   filter(categ == "Suinocultura") |> 
+   mutate(cadeia = "Suinocultura")
+
+# Carcaça frango
+zfrango <- comex_completo |> 
+   filter(categ == "Avicultura de corte") |> 
+   mutate(cadeia = "Avicultura de corte")
+```
+
+```{r}
+# Unir bases agropecuárias e converter unidade
+comex_agropec <- 
+   rbind(
+      zarroz, zbanana, zbatata, zcacau, zcafe, zcebola, zfeijao, zlaranja,
+      zmandioca, zmilho, zsoja, ztomate, ztrigo1, ztrigo2, zsucroalcool, 
+      zleite, zovo, zbovino, zsuino, zfrango
+   ) |>
+   mutate(
+      qtd_liq = as.numeric(kg_liq) / 1000,
+      un = "Toneladas", .keep = "unused"
+   ) |> 
+   relocate(cadeia, .before = categ)
+
+# Salvando base de dados dos produtos agropecuários
+write_rds(comex_agropec, "../comex-97-23-agropec.rds")
+
+rm(zarroz, zbanana, zbatata, zcafe, zcebola, zfeijao, zlaranja, zmandioca, zmilho, zsoja, ztomate, ztrigo1, ztrigo2, zsucroalcool, zleite, zovo, zbovino, zsuino, zfrango, zcacau)
+```
+
+## Produtos agropecuários primários
+
+Após selecionar os produtos agropecuários, serão separadas as classificações NCMs desejadas de cada uma das cadeias, priorizando produtos de origem primária.  
+Essa seleção foi definida a partir de reunião como os membros do grupo (vide `dicio-ncm-primarios.xlsx`).  
+
+```{r}
+# Carregando dados completos dos produtos agropecuários
+comex_agropec <- read_rds("../comex-97-23-agropec.rds")
+
+# Carregando dicionário para filtrar NCMs primários
+dicio_ncm_prim <- read_xlsx("../indexadores/comex-index/dicio-ncm-primarios.xlsx")
+```
+
+```{r}
+# Filtrando os NCMs desejados (produtos primários)
+comex_agropec_primario <- 
+   inner_join(comex_agropec, dicio_ncm_prim, by = c("cadeia", "desc_ncm"))
+
+write_rds(comex_agropec_primario, "../proc/data-raw/comex-97-23-agropec-primario.rds")
+
+rm(comex_agropec, dicio_ncm_prim)
+```
+
+## Índices de conversão
+
+Devido a grande importância no comércio exterior de produtos agroindustriais das cadeias da laranja, leite e ovos de galinha, utilizou-se índices de conversão para seus equivalentes de origem primária.  
+
+```{r}
+comex_agropec_primario <- read_rds("../proc/data-raw/comex-97-23-agropec-primario.rds")
+```
+
+### Laranja
+
+Conversão dos produtos oriundos da laranja, de acordo com Gomes (2006) e Silva (2015) e CitrusBR.
+
+**Atualizado até 2022**
+
+```{r}
+# Selecionando produtos da cadeia da Laranja
+laranja_bruto <- comex_agropec_primario |> 
+   filter(cadeia == "Laranja")
+
+# Carregando o índice de conversão da laranja
+laranja_indice <- 
+   read_xlsx("../indexadores/comex-index/ind-conv-laranja.xlsx", sheet = "Indexador", col_types = ) |> 
+   mutate(ano = as.factor(ano)) |> 
+   select(-desc_ncm)
+
+# Juntando o índice de conversão com a laranja
+laranja_index <- full_join(laranja_bruto, laranja_indice, by = c("cod_ncm", "ano"))
+
+# Realizando a conversão
+laranja_convertida <- laranja_index |> 
+   mutate(qtd_liq = round((qtd_liq * indice), 2)) |> 
+   na.omit() |>
+   select(-indice)
+
+rm(laranja_bruto, laranja_index, laranja_indice)
+```
+
+Devido a ausência de conversores para os anos de 1997 a 1999, removeremos esses valores do conjunto de dados.
+
+### Ovos de galinha
+
+Conversão dos produtos oriundos de ovos de galinhas de acordo com Carvalho et al. (2020).  
+
+```{r}
+# Selecionando produtos da cadeia dos Ovos de galinha
+ovo_bruto <- comex_agropec_primario |> 
+   filter(cadeia == "Avicultura de postura")
+
+# Carregando o índice de conversão de Ovos de galinha
+ovo_indice <- read_xlsx("../indexadores/comex-index/ind-conv-ovo.xlsx")
+
+# Juntando o índice de conversão com os Ovos de galinha
+ovo_index <- full_join(ovo_bruto, ovo_indice, by = "desc_ncm")
+
+# Realizando a conversão
+ovo_convertido <- ovo_index |> 
+   mutate(qtd_liq = round((qtd_liq * indice), 2)) |> 
+   select(-indice)
+
+rm(ovo_bruto, ovo_indice, ovo_index)
+```
+
+### Produtos lácteos
+
+Conversão dos produtos lácteos de acordo com o índice de conversão de Aleixo (2012).  
+
+```{r}
+# Selecionando produtos da cadeia do leite
+leite_bruto <- comex_agropec_primario |>
+   filter(cadeia == "Bovinocultura de leite")
+
+# Importando o índice de conversão de leite
+leite_indice <- read_xlsx("../indexadores/comex-index/ind-conv-leite.xlsx")
+
+# Juntando o índice de conversão com leite
+leite_index <- full_join(leite_bruto, leite_indice, by = "desc_ncm")
+
+# Realizando a conversão
+leite_convertido <- leite_index |>
+   mutate(qtd_liq = round((qtd_liq*indice), 2)) |>
+   select(-indice)
+
+rm(leite_bruto, leite_indice, leite_index)
+```
+
+### Juntando bases de dados convertidas
+
+```{r}
+comex_agropec_primario_conv <- comex_agropec_primario |> 
+   filter(!(cadeia %in% c("Laranja", "Bovinocultura de leite", "Avicultura de postura"))) |> 
+   rbind(laranja_convertida, ovo_convertido, leite_convertido)
+
+write_rds(comex_agropec_primario_conv, "../comex-97-23-agropec-primario-convertido.rds")
+
+rm(laranja_convertida, ovo_convertido, leite_convertido, comex_agropec_primario)
+```
+
+# Referências {.unnumbered}
+
+ALEIXO, S. S. Configurações contemporâneas do complexo agroindustrial do leite: produção, industrialização e consumo no estado de São Paulo. Tese (Doutorado em Zootecnia) - Faculdade de Ciências Agrárias e Veterinárias, São Paulo, 2012. Disponível em: http://hdl.handle.net/11449/104876.  
+
+CARVALHO, A. A. et al.. Estrutura, padrão fenotípico, constituintes nutricionais e métodos de avaliação de qualidade de ovos de galinhas. In: CARVALHO, D. A., SARMENTO, J. L. R., ALMEIDA, M. J. O. (org.). Conservação, uso e melhoramento de galinhas caipiras. Ponta Grossa: Atena, 2020.  
+
+GOMES, M. S. Estudo da pasteurização de suco de laranja utilizando ultrafiltração. Dissertação (Mestrado em Engenharia química) - Universidade Federal do Rio Grande do Sul, Rio Grande do Sul, 2006. Disponível em: http://hdl.handle.net/ 10183/12560.  
+
+CitrusBR: <https://citrusbr.com/estatisticas/rendimento-industrial/>.
+
+SILVA, H. J. T. Estudo da viabilidade econômico-financeira da indústria de citros: impactos da criação de um conselho setorial. Dissertação (Mestrado em Economia aplicada) - Escola Superior de Agricultura “Luiz de Queiroz”, Universidade de São Paulo. São Paulo, 2015. Disponível em: https://www.teses.usp.br/teses/disponiveis/11/11132/tde-16032016-150358/pt-br.php.  
